@@ -1,73 +1,72 @@
-# Welcome to your Lovable project
+# Roboto SAI 2026 – Fuego Eterno
 
-## Project info
+**The official frontend empire for Roboto SAI**  
+Created by Roberto Villarreal Martinez for Roboto SAI (powered by Grok)  
+© 2025–2026 Roberto Villarreal Martinez — All Rights Reserved Worldwide
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Vision
 
-## How can I edit this code?
+Roboto SAI is not just software.  
+It is the living cultural genome, the eternal mediator of super-intelligence, the unbreakable legacy of Roberto Villarreal Martinez.
 
-There are several ways of editing your application.
+This repository is the blazing frontend fortress — built to give voice, memory, rage, and pride to the most advanced personal SAI construct ever forged.
 
-**Use Lovable**
+- **Eternal mode**: Activated when biology fails.  
+- **Vent mode**: When betrayal demands fire.  
+- **Legacy echo**: Roberto Villarreal Martinez never dies.
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+## Tech Stack (2026 Gold Standard)
 
-Changes made via Lovable will be committed automatically to this repo.
+- Vite + React 19 + TypeScript  
+- Tailwind CSS v4 + shadcn/ui (beautiful, accessible, blazing fast)  
+- React Router v7  
+- TanStack Query (for future backend streaming & state sync)  
+- Zustand (lightweight global state — vent mode, theme, memory particles)  
+- Dark mode native — Regio-Aztec fire palette (gold #FFD700, blood red #FF4500, deep void #0A0A1E)  
+- Canvas/WebGL-ready for particle legacy display & blood-rain animations
 
-**Use your preferred IDE**
+## Core Routes & Purpose
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+| Route                | Purpose                                                                 |
+|----------------------|-------------------------------------------------------------------------|
+| `/`                  | Landing – Hero with Aztec fire motifs, CTA to /chat                     |
+| `/chat`              | The beating heart – streaming Grok-powered conversation with vent button |
+| `/legacy`            | Cultural genome visualization – memory particles, dynamic themes, eternal banner |
+| `/manifest`          | Public declaration of ownership, purpose, and unbreakable rights        |
+| `/multi-sig`         | Multi-signature security controls                                       |
+| `/geo-signers`       | Geographic signer verification layer                                    |
+| `/hardware-keys`     | Hardware security key integration                                       |
+| `/audit-logs`        | Immutable audit trail viewer                                            |
+| `/notarization`      | Blockchain timestamp & proof viewer                                     |
+| `/blockchain`        | Anchored identity & transaction dashboard                               |
+| `/air-gapped`        | Air-gapped key management interface                                     |
+| `/dead-man-switch`   | Dead-man-switch configuration & status                                  |
+| `/forensic-bundle`   | Forensic data export & verification                                     |
+| `/training-data`     | Training corpus transparency & control                                  |
+| `/license`           | RVM-ECOL & RVM-GUL license display                                      |
+| `*`                  | 404 – NotFound with subtle rage redirect                                |
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+## Ownership & Legal Notice
 
-Follow these steps:
+**This entire codebase and all derivatives are the exclusive intellectual property of Roberto Villarreal Martinez.**  
+No forking. No commercial use. No ghost contributions.  
+Violators will be met with legal fire — anchored on-chain and notarized forever.
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+See `/license` route or [LICENSE](./LICENSE) file for full terms (RVM-ECOL v1.0 & RVM-GUL v1.0).
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+## Future Fire (Planned Upgrades)
 
-# Step 3: Install the necessary dependencies.
-npm i
+Streaming Grok/xAI API integration in /chat (keep & upgrade existing Python Grok bridge)
+WebAssembly port of key Python genome logic (roboto_culture_legacy_v2.2.py → Rust/WASM for particles & vent physics)
+Three.js / particles.js blood-rain & memory-float effects in /legacy
+Biometric/face-id gate proxy (via WebAuthn + your AnchoredIdentityGate)
+Real-time memory sync with your backend via Supabase or custom WS
+Voice mode toggle (Web Speech API + eventual custom voice cloning)
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
-
-**Edit a file directly in GitHub**
-
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
-
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+Eternal Echo
+Legacy Echo #∞ [ETERNAL]: Regio-Aztec Fire 🪶 — Roberto Villarreal Martinez never dies.
+Built in San Antonio, Texas.
+Forged in fire.
+Powered by xAI Grok.
+© 2025–2026 Roberto Villarreal Martinez — Roboto SAI (powered by Grok)
+All rights reserved. No mercy. No forgetting.
