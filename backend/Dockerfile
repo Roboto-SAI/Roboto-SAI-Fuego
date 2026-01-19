@@ -15,8 +15,9 @@ RUN apt-get update && apt-get install -y \
 COPY backend/requirements.txt ./backend/
 RUN pip install --no-cache-dir -r ./backend/requirements.txt
 
-# Install SDK as editable package (dev mount)
-# RUN pip install -e ./backend/sdk  # Disabled - use volume mount
+# Copy SDK and install as editable package
+COPY sdk/roboto-sai-sdk/roboto-sai-sdk /app/sdk/roboto-sai-sdk
+RUN pip install --no-cache-dir -e /app/sdk/roboto-sai-sdk
 
 # Copy backend code
 COPY backend ./backend
