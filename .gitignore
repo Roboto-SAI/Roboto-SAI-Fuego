@@ -22,3 +22,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Github
+.github/*
+# Agent-Memory
+AI-Memory/*
+
+# Environment
+.env

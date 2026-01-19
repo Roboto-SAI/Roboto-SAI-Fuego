@@ -36,16 +36,28 @@ services:
     profiles:
       - prod
 
-  # Future: Python backend service (placeholder)
-  # roboto-sai-backend:
-  #   build:
-  #     context: ./backend
-  #     dockerfile: Dockerfile
-  #   container_name: roboto-sai-backend
-  #   ports:
-  #     - "5000:5000"
-  #   environment:
-  #     - PYTHON_ENV=production
-  #   restart: unless-stopped
-  #   profiles:
-  #     - prod
+  # Python FastAPI Backend - Roboto SAI 2026
+  roboto-sai-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: roboto-sai-backend
+    ports:
+      - "5000:5000"
+    environment:
+      - PYTHON_ENV=production
+      - XAI_API_KEY=${XAI_API_KEY}
+    env_file:
+      - .env
+    volumes:
+      - ./backend:/app/backend
+    restart: unless-stopped
+    networks:
+      - roboto-network
+    profiles:
+      - prod
+      - dev
+
+networks:
+  roboto-network:
+    driver: bridge
