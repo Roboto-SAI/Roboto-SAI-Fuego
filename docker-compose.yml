@@ -1,8 +1,6 @@
 # Roboto SAI 2026 - Fuego Eterno Edition
 # Docker Compose configuration for development and production
 
-version: '3.8'
-
 services:
   # Development service
   roboto-sai-dev:

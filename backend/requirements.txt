@@ -4,4 +4,4 @@ pydantic>=2.0.0
 python-dotenv>=1.0.0
 
 # Roboto SAI SDK (from separate GitHub repository)
-roboto-sai-sdk @ git+https://github.com/Roboto-SAI/roboto-sai-sdk.git@main
+roboto-sai-sdk @ git+https://github.com/Roboto-SAI-LLC/roboto-sai-sdk.git@main

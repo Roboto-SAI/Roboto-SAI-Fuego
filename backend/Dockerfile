@@ -5,6 +5,7 @@ WORKDIR /app/backend
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     build-essential \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for layer caching

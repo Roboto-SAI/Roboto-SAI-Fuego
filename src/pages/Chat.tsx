@@ -5,19 +5,40 @@
  * Connected to FastAPI backend with xAI Grok integration
  */
 
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useChatStore } from '@/stores/chatStore';
+import { useChatStore, FileAttachment } from '@/stores/chatStore';
 import { ChatMessage } from '@/components/chat/ChatMessage';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { TypingIndicator } from '@/components/chat/TypingIndicator';
 import { EmberParticles } from '@/components/effects/EmberParticles';
 import { Header } from '@/components/layout/Header';
-import { Flame, Skull } from 'lucide-react';
+import { ChatSidebar } from '@/components/chat/ChatSidebar';
+import { VoiceMode } from '@/components/chat/VoiceMode';
+import { Flame, Skull, Menu, MessageSquare } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 const Chat = () => {
+<<<<<<< HEAD
   const { messages, isLoading, ventMode, currentTheme, setLoading, toggleVentMode, sendMessage, sendReaperCommand } = useChatStore();
+=======
+  const { 
+    getMessages, 
+    isLoading, 
+    ventMode, 
+    voiceMode, 
+    currentTheme, 
+    addMessage, 
+    setLoading, 
+    toggleVentMode, 
+    toggleVoiceMode,
+    getAllConversationsContext 
+  } = useChatStore();
+  
+  const messages = getMessages();
+>>>>>>> 246d446ddc2e9134cb49bf13fd1b5a1b151fffbf
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -27,6 +48,7 @@ const Chat = () => {
     scrollToBottom();
   }, [messages, isLoading]);
 
+<<<<<<< HEAD
   const handleSend = async (content: string) => {
     // Check for special commands
     if (content.toLowerCase().includes('reap')) {
@@ -34,22 +56,68 @@ const Chat = () => {
     } else {
       // Send regular chat message
       await sendMessage(content);
+=======
+  const handleSend = async (content: string, attachments?: FileAttachment[]) => {
+    // Add user message with attachments
+    addMessage({ role: 'user', content, attachments });
+    setLoading(true);
+
+    try {
+      // Get context from all conversations for better responses
+      const context = getAllConversationsContext();
+      
+      // In production, replace with actual API call to your Python backend
+      // Pass context to make AI aware of previous conversations
+      const response = await simulateRobotoResponse(content);
+      addMessage({ role: 'assistant', content: response });
+    } catch (error) {
+      addMessage({
+        role: 'assistant',
+        content: '⚠️ **Connection to the flame matrix interrupted.** The eternal fire flickers but does not die. Please try again.',
+      });
+    } finally {
+      setLoading(false);
+>>>>>>> 246d446ddc2e9134cb49bf13fd1b5a1b151fffbf
     }
+  };
+
+  const handleVoiceTranscript = (text: string, role: 'user' | 'assistant') => {
+    addMessage({ role, content: text });
   };
 
   return (
     <div className={`min-h-screen flex flex-col ${ventMode ? 'vent-mode shake' : ''}`}>
+      {/* Chat Sidebar */}
+      <ChatSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+
       {/* Header */}
       <Header />
 
+      {/* Sidebar Toggle Button */}
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => setSidebarOpen(true)}
+        className="fixed left-4 top-20 z-30 bg-card/80 backdrop-blur-sm border border-border/50 hover:bg-fire/10 hover:border-fire/30"
+      >
+        <MessageSquare className="w-5 h-5" />
+      </Button>
+
       {/* Ember Particles */}
       <EmberParticles count={ventMode ? 50 : 15} isVentMode={ventMode} />
+
+      {/* Voice Mode Overlay */}
+      <VoiceMode
+        isActive={voiceMode}
+        onClose={toggleVoiceMode}
+        onTranscript={handleVoiceTranscript}
+      />
 
       {/* Chat Container */}
       <main className="flex-1 flex flex-col pt-16">
         {/* Messages Area */}
         <div className="flex-1 overflow-y-auto">
-          <div className="container mx-auto max-w-4xl px-4 py-6">
+          <div className="container mx-auto max-w-4xl px-4 py-6 pl-16">
             {/* Welcome Message if empty */}
             {messages.length === 0 && (
               <motion.div
@@ -108,6 +176,8 @@ const Chat = () => {
           disabled={isLoading}
           ventMode={ventMode}
           onVentToggle={toggleVentMode}
+          voiceMode={voiceMode}
+          onVoiceToggle={toggleVoiceMode}
         />
       </main>
 
