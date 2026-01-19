@@ -34,12 +34,16 @@ async def lifespan(app: FastAPI):
     global roboto_client, xai_grok
     
     logger.info("🚀 Roboto SAI 2026 Backend Starting...")
-    
+
     try:
-        # Initialize Roboto SAI Client
-        roboto_client = RobotoSAIClient()
-        logger.info(f"✅ Roboto SAI Client initialized: {roboto_client.client_id}")
-        
+        if os.getenv("XAI_API_KEY"):
+            # Initialize Roboto SAI Client
+            roboto_client = RobotoSAIClient()
+            logger.info(f"✅ Roboto SAI Client initialized: {roboto_client.client_id}")
+        else:
+            logger.warning("⚠️ No XAI_API_KEY - running in degraded mode (no AI)")
+            roboto_client = None
+
         # Initialize xAI Grok
         xai_grok = get_xai_grok()
         if xai_grok.available:
