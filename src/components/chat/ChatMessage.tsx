@@ -4,6 +4,7 @@
  */
 
 import { motion } from 'framer-motion';
+import { forwardRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { User, Bot, Paperclip, FileText, Image } from 'lucide-react';
 import type { Message, FileAttachment } from '@/stores/chatStore';
@@ -40,11 +41,12 @@ const AttachmentPreview = ({ attachment }: { attachment: FileAttachment }) => {
   );
 };
 
-export const ChatMessage = ({ message }: ChatMessageProps) => {
+export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(({ message }, ref) => {
   const isUser = message.role === 'user';
 
   return (
     <motion.div
+      ref={ref}
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
@@ -124,4 +126,6 @@ export const ChatMessage = ({ message }: ChatMessageProps) => {
       </div>
     </motion.div>
   );
-};
+});
+
+ChatMessage.displayName = 'ChatMessage';

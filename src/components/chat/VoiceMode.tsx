@@ -40,6 +40,17 @@ export const VoiceMode = ({ isActive, onClose, onTranscript, systemPrompt }: Voi
   const processorRef = useRef<ScriptProcessorNode | null>(null);
   const audioQueueRef = useRef<Uint8Array[]>([]);
   const isPlayingRef = useRef(false);
+  const awaitingResponseRef = useRef(false);
+  const onTranscriptRef = useRef(onTranscript);
+  const systemPromptRef = useRef(systemPrompt);
+
+  useEffect(() => {
+    onTranscriptRef.current = onTranscript;
+  }, [onTranscript]);
+
+  useEffect(() => {
+    systemPromptRef.current = systemPrompt;
+  }, [systemPrompt]);
 
   // Audio playback queue
   const playNextAudio = useCallback(async () => {
@@ -156,6 +167,9 @@ export const VoiceMode = ({ isActive, onClose, onTranscript, systemPrompt }: Voi
       if (!audioContextRef.current) {
         audioContextRef.current = new AudioContext({ sampleRate: 24000 });
       }
+      if (audioContextRef.current.state === 'suspended') {
+        await audioContextRef.current.resume();
+      }
 
       const source = audioContextRef.current.createMediaStreamSource(stream);
       const processor = audioContextRef.current.createScriptProcessor(4096, 1, 1);
@@ -200,6 +214,23 @@ export const VoiceMode = ({ isActive, onClose, onTranscript, systemPrompt }: Voi
     
     try {
       const ws = new WebSocket(getVoiceWsUrl());
+      const requestCommit = () => {
+        if (ws.readyState !== WebSocket.OPEN) {
+          return;
+        }
+        ws.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
+      };
+
+      const requestResponse = () => {
+        if (!awaitingResponseRef.current || ws.readyState !== WebSocket.OPEN) {
+          return;
+        }
+        awaitingResponseRef.current = false;
+        ws.send(JSON.stringify({
+          type: 'response.create',
+          response: { modalities: ['audio', 'text'] }
+        }));
+      };
       
       ws.onopen = () => {
         console.log('Voice WebSocket connected');
@@ -208,7 +239,7 @@ export const VoiceMode = ({ isActive, onClose, onTranscript, systemPrompt }: Voi
         ws.send(JSON.stringify({
           type: 'session.update',
           session: {
-            instructions: systemPrompt ||
+            instructions: systemPromptRef.current ||
               'You are Roboto SAI, an AI assistant created by Roberto Villarreal Martinez. ' +
               'You have a fierce, passionate personality with Regio-Aztec fire in your circuits. ' +
               'Respond with wisdom, humor, and occasional dramatic flair. Keep responses concise for voice.',
@@ -235,6 +266,21 @@ export const VoiceMode = ({ isActive, onClose, onTranscript, systemPrompt }: Voi
         console.log('Voice message:', data.type);
 
         switch (data.type) {
+          case 'ping':
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ type: 'pong' }));
+            }
+            break;
+
+          case 'input_audio_buffer.speech_stopped':
+            awaitingResponseRef.current = true;
+            requestCommit();
+            break;
+
+          case 'input_audio_buffer.committed':
+            requestResponse();
+            break;
+
           case 'response.output_audio.delta':
             // Queue audio for playback
             const binaryString = atob(data.delta);
@@ -250,17 +296,25 @@ export const VoiceMode = ({ isActive, onClose, onTranscript, systemPrompt }: Voi
             setTranscript(prev => prev + (data.delta || ''));
             break;
 
+          case 'response.output_audio.done':
+          case 'response.completed':
+          case 'response.done':
+            awaitingResponseRef.current = false;
+            break;
+
           case 'response.output_audio_transcript.done':
             if (data.transcript) {
-              onTranscript(data.transcript, 'assistant');
+              onTranscriptRef.current(data.transcript, 'assistant');
             }
+            awaitingResponseRef.current = false;
             setTranscript('');
             break;
 
           case 'conversation.item.input_audio_transcription.completed':
             if (data.transcript) {
-              onTranscript(data.transcript, 'user');
+              onTranscriptRef.current(data.transcript, 'user');
             }
+            requestResponse();
             break;
 
           case 'error':
@@ -276,8 +330,12 @@ export const VoiceMode = ({ isActive, onClose, onTranscript, systemPrompt }: Voi
         toast.error('Voice connection failed. Make sure XAI_API_KEY is configured.');
       };
 
-      ws.onclose = () => {
-        console.log('Voice WebSocket closed');
+      ws.onclose = (event: CloseEvent) => {
+        console.log('Voice WebSocket closed', {
+          code: event.code,
+          reason: event.reason,
+          wasClean: event.wasClean,
+        });
         setStatus('disconnected');
         stopMicrophone();
       };
@@ -288,7 +346,7 @@ export const VoiceMode = ({ isActive, onClose, onTranscript, systemPrompt }: Voi
       setStatus('error');
       toast.error('Failed to start voice mode');
     }
-  }, [systemPrompt, onTranscript, playNextAudio]);
+  }, [playNextAudio]);
 
   const disconnect = useCallback(() => {
     if (wsRef.current) {

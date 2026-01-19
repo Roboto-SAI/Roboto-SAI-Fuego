@@ -12,7 +12,6 @@ export default defineConfig(({ mode }) => ({
       "/api": {
         target: "http://localhost:5000",
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, ""),
       },
     },
   },
@@ -23,6 +22,6 @@ export default defineConfig(({ mode }) => ({
     },
   },
   define: {
-    "import.meta.env.VITE_API_URL": JSON.stringify(process.env.VITE_API_URL || "http://localhost:5000/api"),
+    "import.meta.env.VITE_API_URL": JSON.stringify(process.env.VITE_API_URL || "http://localhost:5000"),
   },
 }));

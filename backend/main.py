@@ -9,18 +9,24 @@ Created by Roberto Villarreal Martinez
 import os
 import logging
 import asyncio
+import json
 from typing import Dict, Any, Optional
 from datetime import datetime
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect, Depends
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 import websockets
 
 # Import Roboto SAI SDK
 from roboto_sai_sdk import RobotoSAIClient, get_xai_grok
+from db import get_session, init_db
+from models import Message
+from advanced_emotion_simulator import AdvancedEmotionSimulator
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -29,6 +35,7 @@ logger = logging.getLogger(__name__)
 # Global client instance
 roboto_client: Optional[RobotoSAIClient] = None
 xai_grok = None
+emotion_simulator: Optional[AdvancedEmotionSimulator] = None
 VOICE_WS_URL = "wss://api.x.ai/v1/realtime"
 
 # Startup/Shutdown events
@@ -40,6 +47,16 @@ async def lifespan(app: FastAPI):
     logger.info("🚀 Roboto SAI 2026 Backend Starting...")
 
     try:
+        await init_db()
+
+        state_path = os.getenv("ROBO_EMOTION_STATE_PATH", "./data/emotion_state.json")
+        emotion_simulator_instance = AdvancedEmotionSimulator()
+        if os.path.exists(state_path):
+            emotion_simulator_instance.load_state(state_path)
+
+        global emotion_simulator
+        emotion_simulator = emotion_simulator_instance
+
         if os.getenv("XAI_API_KEY"):
             # Initialize Roboto SAI Client
             roboto_client = RobotoSAIClient()
@@ -59,6 +76,10 @@ async def lifespan(app: FastAPI):
         raise
     
     yield
+
+    if emotion_simulator:
+        state_path = os.getenv("ROBO_EMOTION_STATE_PATH", "./data/emotion_state.json")
+        emotion_simulator.save_state(state_path)
     
     logger.info("🛑 Roboto SAI 2026 Backend Shutting Down...")
 
@@ -73,7 +94,11 @@ app = FastAPI(
 # Configure CORS for frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "http://localhost:8080",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -85,6 +110,23 @@ class ChatMessage(BaseModel):
     message: str
     context: Optional[str] = None
     reasoning_effort: Optional[str] = "high"
+    user_id: Optional[str] = None
+    session_id: Optional[str] = None
+
+class EmotionSimRequest(BaseModel):
+    """Emotion simulation request."""
+    event: str
+    intensity: Optional[int] = 5
+    blend_threshold: Optional[float] = 0.8
+    holistic_influence: Optional[bool] = False
+    cultural_context: Optional[str] = None
+
+class EmotionFeedbackRequest(BaseModel):
+    """Emotion feedback request."""
+    event: str
+    emotion: str
+    rating: float
+    psych_context: Optional[bool] = False
 
 class ReaperRequest(BaseModel):
     """Reaper mode request"""
@@ -176,9 +218,67 @@ async def health_check() -> Dict[str, str]:
     """Simple health check"""
     return {"status": "healthy", "service": "roboto-sai-2026"}
 
+# Emotion Endpoints
+@app.post("/api/emotion/simulate", tags=["Emotion"])
+async def simulate_emotion(request: EmotionSimRequest) -> Dict[str, Any]:
+    """Simulate emotion from a text event."""
+    if not emotion_simulator:
+        raise HTTPException(status_code=503, detail="Emotion simulator not available")
+
+    emotion_text = emotion_simulator.simulate_emotion(
+        event=request.event,
+        intensity=request.intensity or 5,
+        blend_threshold=request.blend_threshold or 0.8,
+        holistic_influence=bool(request.holistic_influence),
+        cultural_context=request.cultural_context
+    )
+    base_emotion = emotion_simulator.get_current_emotion()
+    probabilities = emotion_simulator.get_emotion_probabilities(request.event)
+
+    return {
+        "success": True,
+        "emotion": emotion_text,
+        "base_emotion": base_emotion,
+        "probabilities": probabilities,
+        "timestamp": datetime.now().isoformat()
+    }
+
+@app.post("/api/emotion/feedback", tags=["Emotion"])
+async def emotion_feedback(request: EmotionFeedbackRequest) -> Dict[str, Any]:
+    """Provide feedback to tune emotion weights."""
+    if not emotion_simulator:
+        raise HTTPException(status_code=503, detail="Emotion simulator not available")
+
+    emotion_simulator.provide_feedback(
+        event=request.event,
+        emotion=request.emotion,
+        rating=request.rating,
+        psych_context=bool(request.psych_context)
+    )
+
+    return {
+        "success": True,
+        "timestamp": datetime.now().isoformat()
+    }
+
+@app.get("/api/emotion/stats", tags=["Emotion"])
+async def get_emotion_stats() -> Dict[str, Any]:
+    """Get emotion simulator stats."""
+    if not emotion_simulator:
+        raise HTTPException(status_code=503, detail="Emotion simulator not available")
+
+    return {
+        "success": True,
+        "stats": emotion_simulator.get_emotional_stats(),
+        "timestamp": datetime.now().isoformat()
+    }
+
 # Chat Endpoints
 @app.post("/api/chat", tags=["Chat"])
-async def chat_with_grok(request: ChatMessage) -> Dict[str, Any]:
+async def chat_with_grok(
+    request: ChatMessage,
+    session: AsyncSession = Depends(get_session)
+) -> Dict[str, Any]:
     """
     Chat with xAI Grok using Roboto SAI context
     
@@ -194,18 +294,93 @@ async def chat_with_grok(request: ChatMessage) -> Dict[str, Any]:
         raise HTTPException(status_code=503, detail="Grok not available")
     
     try:
-        result = roboto_client.chat_with_grok(
-            request.message,
+        user_emotion: Optional[Dict[str, Any]] = None
+        assistant_emotion: Optional[Dict[str, Any]] = None
+
+        if emotion_simulator:
+            try:
+                emotion_text = emotion_simulator.simulate_emotion(
+                    event=request.message,
+                    intensity=5,
+                    blend_threshold=0.8,
+                    holistic_influence=False,
+                    cultural_context=None,
+                )
+                base_emotion = emotion_simulator.get_current_emotion()
+                probabilities = emotion_simulator.get_emotion_probabilities(request.message)
+                user_emotion = {
+                    "emotion": base_emotion,
+                    "emotion_text": emotion_text,
+                    "probabilities": probabilities,
+                }
+            except Exception as emotion_error:
+                logger.warning(f"Emotion simulation (user) failed: {emotion_error}")
+
+        result = xai_grok.roboto_grok_chat(
+            user_message=request.message,
             roboto_context=request.context,
-            reasoning_effort=request.reasoning_effort
         )
         
         if result.get("success"):
+            response_text = result.get("response", "")
+            if emotion_simulator and response_text:
+                try:
+                    assistant_emotion_text = emotion_simulator.simulate_emotion(
+                        event=response_text,
+                        intensity=5,
+                        blend_threshold=0.8,
+                        holistic_influence=False,
+                        cultural_context=None,
+                    )
+                    assistant_base_emotion = emotion_simulator.get_current_emotion()
+                    assistant_probabilities = emotion_simulator.get_emotion_probabilities(response_text)
+                    assistant_emotion = {
+                        "emotion": assistant_base_emotion,
+                        "emotion_text": assistant_emotion_text,
+                        "probabilities": assistant_probabilities,
+                    }
+                except Exception as emotion_error:
+                    logger.warning(f"Emotion simulation (assistant) failed: {emotion_error}")
+
+            try:
+                session.add_all([
+                    Message(
+                        user_id=request.user_id,
+                        session_id=request.session_id,
+                        role="user",
+                        content=request.message,
+                        emotion=(user_emotion or {}).get("emotion"),
+                        emotion_text=(user_emotion or {}).get("emotion_text"),
+                        emotion_probabilities=json.dumps((user_emotion or {}).get("probabilities"))
+                        if (user_emotion or {}).get("probabilities")
+                        else None,
+                    ),
+                    Message(
+                        user_id=request.user_id,
+                        session_id=request.session_id,
+                        role="assistant",
+                        content=response_text,
+                        emotion=(assistant_emotion or {}).get("emotion"),
+                        emotion_text=(assistant_emotion or {}).get("emotion_text"),
+                        emotion_probabilities=json.dumps((assistant_emotion or {}).get("probabilities"))
+                        if (assistant_emotion or {}).get("probabilities")
+                        else None,
+                    ),
+                ])
+                await session.commit()
+            except Exception as db_error:
+                await session.rollback()
+                logger.error(f"Chat persistence error: {db_error}")
+
             return {
                 "success": True,
-                "response": result.get("response"),
+                "response": response_text,
                 "reasoning_available": result.get("reasoning_available", False),
                 "response_id": result.get("response_id"),
+                "emotion": {
+                    "user": user_emotion,
+                    "assistant": assistant_emotion,
+                },
                 "timestamp": datetime.now().isoformat()
             }
         else:
@@ -213,6 +388,45 @@ async def chat_with_grok(request: ChatMessage) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Chat error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/chat/history", tags=["Chat"])
+async def get_chat_history(
+    user_id: Optional[str] = None,
+    session_id: Optional[str] = None,
+    limit: int = 50,
+    session: AsyncSession = Depends(get_session)
+) -> Dict[str, Any]:
+    """Retrieve recent chat history."""
+    stmt = select(Message).order_by(Message.created_at.desc()).limit(limit)
+    if user_id:
+        stmt = stmt.where(Message.user_id == user_id)
+    if session_id:
+        stmt = stmt.where(Message.session_id == session_id)
+
+    result = await session.execute(stmt)
+    messages = list(reversed(result.scalars().all()))
+
+    return {
+        "success": True,
+        "count": len(messages),
+        "messages": [
+            {
+                "id": message.id,
+                "user_id": message.user_id,
+                "session_id": message.session_id,
+                "role": message.role,
+                "content": message.content,
+                "emotion": message.emotion,
+                "emotion_text": message.emotion_text,
+                "emotion_probabilities": json.loads(message.emotion_probabilities)
+                if message.emotion_probabilities
+                else None,
+                "created_at": message.created_at.isoformat() if message.created_at else None,
+            }
+            for message in messages
+        ],
+        "timestamp": datetime.now().isoformat(),
+    }
 
 # Reaper Mode Endpoint
 @app.post("/api/reap", tags=["Reaper"])

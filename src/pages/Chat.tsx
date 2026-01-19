@@ -17,6 +17,8 @@ import { ChatSidebar } from '@/components/chat/ChatSidebar';
 import { VoiceMode } from '@/components/chat/VoiceMode';
 import { Flame, Skull, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useNavigate } from 'react-router-dom';
+import { useAuthStore } from '@/stores/authStore';
 
 // Simulated response for demo - replace with actual API call
 const simulateRobotoResponse = async (content: string): Promise<string> => {
@@ -31,7 +33,26 @@ const simulateRobotoResponse = async (content: string): Promise<string> => {
   return responses[Math.floor(Math.random() * responses.length)];
 };
 
+type ChatApiResponse = {
+  response?: string;
+  content?: string;
+  error?: string;
+  detail?: string;
+};
+
+const getApiBaseUrl = (): string => {
+  const envUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '';
+  const trimmed = envUrl.replace(/\/+$/, '');
+  if (!trimmed) {
+    return '';
+  }
+
+  return trimmed.endsWith('/api') ? trimmed.slice(0, -4) : trimmed;
+};
+
 const Chat = () => {
+  const navigate = useNavigate();
+  const { userId, isLoggedIn } = useAuthStore();
   const { 
     getMessages, 
     isLoading, 
@@ -42,7 +63,11 @@ const Chat = () => {
     setLoading, 
     toggleVentMode, 
     toggleVoiceMode,
-    getAllConversationsContext 
+    getAllConversationsContext,
+    loadUserHistory,
+    currentConversationId,
+    createNewConversation,
+    userId: storeUserId
   } = useChatStore();
   
   const messages = getMessages();
@@ -57,7 +82,23 @@ const Chat = () => {
     scrollToBottom();
   }, [messages, isLoading]);
 
+  useEffect(() => {
+    if (!isLoggedIn) {
+      navigate('/');
+      return;
+    }
+
+    if (userId && userId !== storeUserId) {
+      loadUserHistory(userId);
+    }
+  }, [isLoggedIn, userId, storeUserId, loadUserHistory, navigate]);
+
   const handleSend = async (content: string, attachments?: FileAttachment[]) => {
+    if (!isLoggedIn || !userId) {
+      navigate('/');
+      return;
+    }
+
     // Add user message with attachments
     addMessage({ role: 'user', content, attachments });
     setLoading(true);
@@ -65,16 +106,27 @@ const Chat = () => {
     try {
       // Get context from all conversations for better responses
       const context = getAllConversationsContext();
+      const sessionId = currentConversationId || createNewConversation();
       
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+      const apiBaseUrl = getApiBaseUrl();
+      const chatUrl = apiBaseUrl ? `${apiBaseUrl}/api/chat` : '/api/chat';
       
-      const response = await fetch(`${API_URL}/api/chat`, {
+      const response = await fetch(chatUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: content, context }),
+        body: JSON.stringify({
+          message: content,
+          context,
+          user_id: userId,
+          session_id: sessionId,
+        }),
       });
       
-      const data = await response.json();
+      const data = (await response.json()) as ChatApiResponse;
+      if (!response.ok) {
+        const errorMessage = data.detail || data.error || `Request failed (${response.status})`;
+        throw new Error(errorMessage);
+      }
       addMessage({ role: 'assistant', content: data.response || data.content || 'Flame response received.' });
     } catch (error) {
       addMessage({

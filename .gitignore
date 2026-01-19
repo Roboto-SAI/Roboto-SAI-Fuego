@@ -40,5 +40,5 @@ AI-Memory/*
 ~
 .roboto
 # VSCODE
-,vscode/*
+.vscode/*
 !.vscode/extensions.json

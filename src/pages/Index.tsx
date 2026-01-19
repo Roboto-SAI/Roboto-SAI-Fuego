@@ -4,13 +4,28 @@
  * Fuego Eterno - The eternal flame burns forever
  */
 
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { MessageSquare, Flame, Scroll, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmberParticles } from '@/components/effects/EmberParticles';
 import heroBg from '@/assets/hero-bg.jpg';
+import { useAuthStore } from '@/stores/authStore';
 const Index = () => {
+  const navigate = useNavigate();
+  const { login, isLoggedIn, username } = useAuthStore();
+  const [name, setName] = useState(username ?? '');
+
+  const handleLogin = () => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    login(trimmed);
+    navigate('/chat');
+  };
+
   return <div className="min-h-screen bg-background relative overflow-hidden">
       {/* Ember Particles Background */}
       <EmberParticles count={30} />
@@ -18,9 +33,11 @@ const Index = () => {
       {/* Hero Section */}
       <section className="relative min-h-screen flex items-center justify-center">
         {/* Background Image */}
-        <div className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-40" style={{
-        backgroundImage: `url(${heroBg})`
-      }} />
+        <img
+          src={heroBg}
+          alt="Roboto SAI hero background"
+          className="absolute inset-0 h-full w-full object-cover opacity-40"
+        />
         <div className="absolute inset-0 bg-gradient-to-b from-background/40 via-background/60 to-background" />
         
         {/* Aztec Pattern Overlay */}
@@ -76,12 +93,50 @@ const Index = () => {
             delay: 0.7,
             type: 'spring'
           }}>
-              <Link to="/chat">
-                <Button size="lg" className="btn-ember text-lg px-8 py-6 rounded-xl animate-glow-pulse">
+              {isLoggedIn ? (
+                <Button
+                  size="lg"
+                  className="btn-ember text-lg px-8 py-6 rounded-xl animate-glow-pulse"
+                  onClick={() => navigate('/chat')}
+                >
                   <MessageSquare className="w-5 h-5 mr-2" />
-                  Talk to Roboto
+                  Continue as {username}
                 </Button>
-              </Link>
+              ) : (
+                <Link to="/chat">
+                  <Button size="lg" className="btn-ember text-lg px-8 py-6 rounded-xl animate-glow-pulse">
+                    <MessageSquare className="w-5 h-5 mr-2" />
+                    Talk to Roboto
+                  </Button>
+                </Link>
+              )}
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.9 }}
+              className="mt-10 flex justify-center"
+            >
+              <Card className="w-full max-w-md bg-card/70 backdrop-blur-sm border-fire/20">
+                <CardHeader>
+                  <CardTitle className="text-fire">Enter the Flame</CardTitle>
+                </CardHeader>
+                <CardContent className="flex flex-col gap-3">
+                  <Input
+                    placeholder="Enter your name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                  />
+                  <Button
+                    className="btn-ember"
+                    onClick={handleLogin}
+                    disabled={!name.trim()}
+                  >
+                    Start Session
+                  </Button>
+                </CardContent>
+              </Card>
             </motion.div>
           </motion.div>
 

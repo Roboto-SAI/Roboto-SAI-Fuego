@@ -8,6 +8,7 @@ import { Plus, MessageSquare, Trash2, X, ChevronLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useChatStore } from '@/stores/chatStore';
+import { useAuthStore } from '@/stores/authStore';
 
 interface ChatSidebarProps {
   isOpen: boolean;
@@ -20,8 +21,10 @@ export const ChatSidebar = ({ isOpen, onClose }: ChatSidebarProps) => {
     currentConversationId, 
     createNewConversation, 
     selectConversation,
-    deleteConversation 
+    deleteConversation,
+    resetConversations
   } = useChatStore();
+  const { username, logout } = useAuthStore();
 
   const handleNewChat = () => {
     createNewConversation();
@@ -141,9 +144,22 @@ export const ChatSidebar = ({ isOpen, onClose }: ChatSidebarProps) => {
 
         {/* Footer */}
         <div className="p-4 border-t border-border/50">
-          <p className="text-xs text-muted-foreground text-center">
-            All chats are stored locally
-          </p>
+          <div className="flex flex-col gap-2 text-center">
+            <p className="text-xs text-muted-foreground">
+              Signed in as {username ?? 'Guest'}
+            </p>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                logout();
+                resetConversations();
+              }}
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              Log out
+            </Button>
+          </div>
         </div>
       </motion.aside>
     </>
