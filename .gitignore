@@ -25,7 +25,11 @@ dist-ssr
 
 # Backend
 BackendAdds/*
-backend/*
+backend/__pycache__/
+backend/.venv/
+backend/venv*/
+backend/.mypy_cache/
+backend/.pytest_cache/
 
 # Github
 .github/*
