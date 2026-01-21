@@ -5,6 +5,10 @@
     "docker-compose.devcontainer.json"
   ],
   "service": "roboto-sai-dev",
+  "runServices": [
+    "roboto-sai-dev",
+    "roboto-sai-backend"
+  ],
   "workspaceFolder": "/app",
   "features": {
     "ghcr.io/devcontainers/features/node:1": {

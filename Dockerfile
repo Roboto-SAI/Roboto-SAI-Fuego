@@ -14,11 +14,15 @@ RUN apt-get update && apt-get install -y \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Create symbolic link for python command
-RUN ln -s /usr/bin/python3 /usr/bin/python
+# Create symbolic link for python command and create an isolated venv for Python packages to avoid PEP 668
+RUN ln -s /usr/bin/python3 /usr/bin/python \
+    && python -m venv /opt/venv \
+    && /opt/venv/bin/python -m pip install --upgrade pip setuptools wheel \
+    && /opt/venv/bin/pip install --no-cache-dir uv \
+    && ln -s /opt/venv/bin/uvx /usr/local/bin/uvx
 
-# Install uv (provides uvx) for MCP servers
-RUN python -m pip install --no-cache-dir uv
+# Ensure virtualenv binaries are on PATH
+ENV PATH="/opt/venv/bin:$PATH"
 
 WORKDIR /app
 

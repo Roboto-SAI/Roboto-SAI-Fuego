@@ -11,7 +11,7 @@
       "volumes": [
         "./backend:/app/backend:cached",
         "./BackendAdds:/app/BackendAdds:cached",
-        "./sdk:/app/sdk:cached"
+        "./sdk/roboto-sai-sdk/roboto-sai-sdk:/app/sdk/roboto-sai-sdk:cached"
       ],
       "command": "uvicorn main:app --host 0.0.0.0 --port 5000 --reload",
       "ports": ["5000:5000"]

@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y \
 # COPY sdk/roboto_sai_sdk ./backend/sdk  # Disabled - use mount
 
 # Copy SDK and install as editable package
-COPY sdk/roboto-sai-sdk/roboto-sai-sdk /app/sdk/roboto-sai-sdk
+COPY sdk/roboto-sai-sdk /app/sdk/roboto-sai-sdk
 
 # Copy requirements and install dependencies
 COPY backend/requirements.txt ./backend/

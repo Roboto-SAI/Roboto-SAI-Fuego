@@ -81,15 +81,7 @@ export const useChatStore = create<ChatState>()(
       currentTheme: 'Regio-Aztec Fire #42',
       voiceMode: false,
       userId: null,
-      {
-        name: 'roboto-sai-chat-storage',
-        getStorage: () => localStorage,
-        partialize: (state) => ({
-          conversations: state.conversations,
-          currentConversationId: state.currentConversationId,
-          currentTheme: state.currentTheme,
-          userId: state.userId,
-        }),
+      getCurrentConversation: () => {
         const state = get();
         return state.conversations.find(c => c.id === state.currentConversationId);
       },
