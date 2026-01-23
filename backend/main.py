@@ -25,6 +25,7 @@ from pydantic import BaseModel
 # from sqlalchemy.ext.asyncio import AsyncSession  # Deprecated
 import httpx
 import websockets
+from dotenv import load_dotenv
 
 # LangChain imports
 from langchain_core.runnables import RunnableLambda, RunnablePassthrough
@@ -41,6 +42,9 @@ from grok_llm import GrokLLM
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Load local .env when running outside Docker
+load_dotenv()
 
 # Global client instance
 roboto_client: Optional[RobotoSAIClient] = None
