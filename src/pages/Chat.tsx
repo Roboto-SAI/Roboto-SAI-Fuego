@@ -106,11 +106,12 @@ const Chat = () => {
       return;
     }
 
-    // Add user message with attachments
-    const conversationId = addMessage({ role: 'user', content, attachments });
     setLoading(true);
 
     try {
+      // Add user message with attachments
+      const conversationId = addMessage({ role: 'user', content, attachments });
+      
       // Get context from all conversations for better responses
       const context = getAllConversationsContext();
       const sessionId = conversationId;
@@ -130,16 +131,18 @@ const Chat = () => {
       });
       
       const data = (await response.json()) as ChatApiResponse;
+      
       if (!response.ok) {
         const errorMessage = data.detail || data.error || `Request failed (${response.status})`;
         throw new Error(errorMessage);
       }
+      
       addMessage({ 
         role: 'assistant', 
         content: data.response || data.content || 'Flame response received.',
         id: data.assistant_message_id || undefined,
       });
-    } catch {
+    } catch (error) {
       addMessage({
         role: 'assistant',
         content: '⚠️ **Connection to the flame matrix interrupted.** The eternal fire flickers but does not die. Please try again.',

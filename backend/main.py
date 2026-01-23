@@ -366,6 +366,8 @@ class ChatMessage(BaseModel):
     reasoning_effort: Optional[str] = "high"
     user_id: Optional[str] = None
     session_id: Optional[str] = None
+    previous_response_id: Optional[str] = None
+    use_encrypted_content: bool = False
 
 class EmotionSimRequest(BaseModel):
     """Emotion simulation request."""
@@ -582,8 +584,16 @@ async def chat_with_grok(
         # Combine history with new message
         all_messages = history_messages + [user_message]
 
-        # Call GrokLLM with full conversation history
-        response_text = await grok_llm._acall(all_messages)
+        # Call GrokLLM with Responses API for conversation chaining
+        grok_result = await grok_llm.acall_with_response_id(
+            all_messages,
+            emotion=user_emotion.get('emotion_text', '') if user_emotion else '',
+            user_name=user.get('user_metadata', {}).get('name', 'user'),
+            previous_response_id=request.previous_response_id
+        )
+        response_text = grok_result.get('response', '')
+        response_id = grok_result.get('response_id')
+        encrypted_thinking = grok_result.get('encrypted_thinking')
 
         # Compute assistant emotion
         if emotion_simulator and response_text:
@@ -613,12 +623,28 @@ async def chat_with_grok(
             additional_kwargs=assistant_emotion or {}
         )
         assistant_message_id = await history_store.add_message(assistant_message)
+        
+        # Store response_id if available
+        if response_id and assistant_message_id:
+            try:
+                supabase = get_supabase_client()
+                if supabase:
+                    await run_supabase_async(
+                        supabase.table('messages').update({
+                            'xai_response_id': response_id,
+                            'xai_encrypted_thinking': encrypted_thinking
+                        }).eq('id', assistant_message_id).execute
+                    )
+            except Exception as e:
+                logger.warning(f'Failed to store response_id: {e}')
 
         return {
             "success": True,
             "response": response_text,
             "reasoning_available": False,
-            "response_id": f"lc-{session_id}",
+            "response_id": response_id or f"lc-{session_id}",
+            "encrypted_thinking": encrypted_thinking,
+            "xai_stored": grok_result.get('stored', False),
             "assistant_message_id": assistant_message_id,
             "user_message_id": user_message_id,
             "emotion": {
