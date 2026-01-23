@@ -24,8 +24,7 @@ import websockets
 
 # LangChain imports
 from langchain_core.runnables import RunnableLambda, RunnablePassthrough
-from langchain_core.runnables.history import RunnableWithMessageHistory
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, AIMessage
 
 # Import Roboto SAI SDK
 from roboto_sai_sdk import RobotoSAIClient, get_xai_grok
@@ -43,7 +42,7 @@ logger = logging.getLogger(__name__)
 roboto_client: Optional[RobotoSAIClient] = None
 xai_grok = None
 emotion_simulator: Optional[AdvancedEmotionSimulator] = None
-grok_chain = None
+grok_llm = None
 VOICE_WS_URL = "wss://api.x.ai/v1/realtime"
 
 # Startup/Shutdown events
@@ -80,16 +79,10 @@ async def lifespan(app: FastAPI):
         else:
             logger.warning("⚠️ xAI Grok not available - check XAI_API_KEY")
         
-        # Initialize LangChain chain
+        # Initialize LangChain GrokLLM
+        global grok_llm
         grok_llm = GrokLLM()
-        global grok_chain
-        grok_chain = RunnableWithMessageHistory(
-            grok_llm,
-            lambda session_id: SQLMessageHistory(session_id=session_id),
-            input_messages_key="messages",
-            history_messages_key="history"
-        )
-        logger.info("✅ LangChain memory chain initialized")
+        logger.info("✅ LangChain GrokLLM initialized")
     except Exception as e:
         logger.error(f"🚨 Backend initialization failed: {e}")
         raise
@@ -311,12 +304,13 @@ async def chat_with_grok(
     Returns:
         Grok response with conversation memory
     """
-    if not grok_chain or not xai_grok or not xai_grok.available:
+    if not grok_llm or not xai_grok or not xai_grok.available:
         raise HTTPException(status_code=503, detail="Grok not available")
     
     try:
         user_emotion: Optional[Dict[str, Any]] = None
         assistant_emotion: Optional[Dict[str, Any]] = None
+        session_id = request.session_id or "default"
 
         # Compute user emotion
         if emotion_simulator:
@@ -338,19 +332,21 @@ async def chat_with_grok(
             except Exception as emotion_error:
                 logger.warning(f"Emotion simulation (user) failed: {emotion_error}")
 
+        # Load conversation history
+        history_store = SQLMessageHistory(session_id=session_id, user_id=request.user_id)
+        history_messages = await history_store._get_messages_async()
+        
         # Prepare user message with emotion
         user_message = HumanMessage(
             content=request.message,
             additional_kwargs=user_emotion or {}
         )
+        
+        # Combine history with new message
+        all_messages = history_messages + [user_message]
 
-        # Use LangChain chain to get response with memory
-        result = await grok_chain.ainvoke(
-            {"messages": [user_message]},
-            config={"configurable": {"session_id": request.session_id or "default"}}
-        )
-
-        response_text = result.content if hasattr(result, 'content') else str(result)
+        # Call GrokLLM with full conversation history
+        response_text = await grok_llm._acall(all_messages)
 
         # Compute assistant emotion
         if emotion_simulator and response_text:
@@ -372,33 +368,21 @@ async def chat_with_grok(
             except Exception as emotion_error:
                 logger.warning(f"Emotion simulation (assistant) failed: {emotion_error}")
 
-        # Save messages to database (LangChain saves automatically, but we add emotion)
-        # The chain already saved via add_message, but without emotion; update or save again
-        try:
-            # Get the history to update with emotion
-            history_store = SQLMessageHistory(session_id=request.session_id or "default")
-            messages = await history_store._get_messages_async()
-            
-            # Update last two messages with emotion
-            if len(messages) >= 2:
-                # Update user message
-                user_msg = messages[-2]
-                user_msg.additional_kwargs.update(user_emotion or {})
-                await history_store.add_message(user_msg)
-                
-                # Update assistant message
-                assistant_msg = messages[-1]
-                assistant_msg.additional_kwargs.update(assistant_emotion or {})
-                await history_store.add_message(assistant_msg)
-                
-        except Exception as db_error:
-            logger.error(f"LangChain memory update error: {db_error}")
+        # Save conversation to database with emotions
+        user_message.additional_kwargs.update(user_emotion or {})
+        await history_store.add_message(user_message)
+        
+        assistant_message = AIMessage(
+            content=response_text,
+            additional_kwargs=assistant_emotion or {}
+        )
+        await history_store.add_message(assistant_message)
 
         return {
             "success": True,
             "response": response_text,
-            "reasoning_available": False,  # LangChain handles reasoning
-            "response_id": f"lc-{request.session_id}",
+            "reasoning_available": False,
+            "response_id": f"lc-{session_id}",
             "emotion": {
                 "user": user_emotion,
                 "assistant": assistant_emotion,

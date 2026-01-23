@@ -7,7 +7,6 @@ from typing import Any, List, Optional, AsyncIterator
 from langchain_core.callbacks import CallbackManagerForLLMRun
 from langchain_core.language_models import LLM
 from langchain_core.outputs import Generation, LLMResult
-from langchain_core.pydantic_v1 import Field
 from langchain_core.messages import BaseMessage, HumanMessage
 
 from roboto_sai_sdk import get_xai_grok
@@ -17,15 +16,13 @@ class GrokLLM(LLM):
     """
     LangChain LLM wrapper for xAI Grok via Roboto SAI SDK.
     """
-
-    client: Any = Field(default=None, description="Roboto SAI client instance")
-    model_name: str = Field(default="grok", description="Model name")
-    reasoning_effort: Optional[str] = Field(default="high", description="Reasoning effort level")
+    
+    model_name: str = "grok"
+    reasoning_effort: Optional[str] = "high"
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        if self.client is None:
-            self.client = get_xai_grok()
+        object.__setattr__(self, 'client', get_xai_grok())
 
     @property
     def _llm_type(self) -> str:
@@ -59,7 +56,9 @@ class GrokLLM(LLM):
         """
         Async call to Grok for better performance.
         """
-        if not self.client or not self.client.available:
+        if not self.client:
+            raise ValueError("Grok client not initialized")
+        if not hasattr(self.client, 'available') or not self.client.available:
             raise ValueError("Grok client not available")
 
         # Handle input
@@ -94,9 +93,15 @@ class GrokLLM(LLM):
         roboto_context = context if context else None
 
         try:
-            result = await self.client.roboto_grok_chat(
-                user_message=user_message,
-                roboto_context=roboto_context,
+            # roboto_grok_chat is sync, not async
+            import asyncio
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                None,
+                lambda: self.client.roboto_grok_chat(
+                    user_message=user_message,
+                    roboto_context=roboto_context,
+                )
             )
 
             if result.get("success"):
