@@ -162,13 +162,36 @@ def _session_ttl() -> timedelta:
         return timedelta(days=7)
 
 
+def _cookie_secure(request: Request) -> bool:
+    env = os.getenv("COOKIE_SECURE")
+    if env is not None:
+        return env.strip().lower() == "true"
+    forwarded_proto = request.headers.get("x-forwarded-proto")
+    scheme = forwarded_proto or request.url.scheme
+    return scheme == "https"
+
+
+def _cookie_samesite() -> str:
+    raw = (os.getenv("COOKIE_SAMESITE") or "lax").strip().lower()
+    if raw not in {"lax", "strict", "none"}:
+        return "lax"
+    return raw
+
+
+def _require_supabase():
+    supabase = get_supabase_client()
+    if supabase is None:
+        raise HTTPException(status_code=503, detail="Supabase not configured")
+    return supabase
+
+
 async def get_current_user(request: Request) -> Dict[str, Any]:
     """Get current user from auth_sessions cookie."""
     sess_id = request.cookies.get(SESSION_COOKIE_NAME)
     if not sess_id:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    supabase = get_supabase_client()
+    supabase = _require_supabase()
     now = _utcnow().isoformat()
     
     # Check session
@@ -208,7 +231,8 @@ async def auth_logout(request: Request) -> JSONResponse:
     sess_id = request.cookies.get(SESSION_COOKIE_NAME)
     if sess_id:
         supabase = get_supabase_client()
-        supabase.table('auth_sessions').delete().eq('id', sess_id).execute()
+        if supabase is not None:
+            supabase.table('auth_sessions').delete().eq('id', sess_id).execute()
 
     resp = JSONResponse({"success": True})
     resp.delete_cookie(SESSION_COOKIE_NAME, path="/")
@@ -220,9 +244,9 @@ class RegisterRequest(BaseModel):
     password: str
 
 @app.post("/api/auth/register", tags=["Auth"])
-async def auth_register(req: RegisterRequest) -> JSONResponse:
+async def auth_register(req: RegisterRequest, request: Request) -> JSONResponse:
     """Register new user with Supabase Auth + local session."""
-    supabase = get_supabase_client()
+    supabase = _require_supabase()
     
     try:
         result = supabase.auth.sign_up({"email": req.email, "password": req.password})
@@ -245,13 +269,12 @@ async def auth_register(req: RegisterRequest) -> JSONResponse:
         supabase.table("auth_sessions").insert({"id": sess_id, "user_id": user_id, "expires_at": expires}).execute()
         
         resp = JSONResponse({"success": True, "user": user_data})
-        secure = os.getenv("COOKIE_SECURE", "false").lower() == "true"
         resp.set_cookie(
             key=SESSION_COOKIE_NAME,
             value=sess_id,
             httponly=True,
-            secure=secure,
-            samesite="lax",
+            secure=_cookie_secure(request),
+            samesite=_cookie_samesite(),
             max_age=int(_session_ttl().total_seconds()),
             path="/",
         )
@@ -265,9 +288,9 @@ class LoginRequest(BaseModel):
     password: str
 
 @app.post("/api/auth/login", tags=["Auth"])
-async def auth_login(req: LoginRequest) -> JSONResponse:
+async def auth_login(req: LoginRequest, request: Request) -> JSONResponse:
     """Login with Supabase Auth + local session."""
-    supabase = get_supabase_client()
+    supabase = _require_supabase()
     
     try:
         result = supabase.auth.sign_in_with_password({"email": req.email, "password": req.password})
@@ -290,13 +313,12 @@ async def auth_login(req: LoginRequest) -> JSONResponse:
         supabase.table("auth_sessions").insert({"id": sess_id, "user_id": user_id, "expires_at": expires}).execute()
         
         resp = JSONResponse({"success": True, "user": user_data})
-        secure = os.getenv("COOKIE_SECURE", "false").lower() == "true"
         resp.set_cookie(
             key=SESSION_COOKIE_NAME,
             value=sess_id,
             httponly=True,
-            secure=secure,
-            samesite="lax",
+            secure=_cookie_secure(request),
+            samesite=_cookie_samesite(),
             max_age=int(_session_ttl().total_seconds()),
             path="/",
         )
@@ -308,7 +330,7 @@ async def auth_login(req: LoginRequest) -> JSONResponse:
 @app.post("/api/auth/magic/request", tags=["Auth"])
 async def auth_magic_request(req: MagicRequest) -> Dict[str, Any]:
     """Request magic link (Supabase OTP)."""
-    supabase = get_supabase_client()
+    supabase = _require_supabase()
     
     try:
         supabase.auth.sign_in_with_otp({"email": req.email})

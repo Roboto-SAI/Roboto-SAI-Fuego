@@ -1,63 +1,21 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { MemoryRouter } from 'react-router-dom';
 import { AuthForm } from '@/components/auth/AuthForm';
-import { useAuthStore } from '@/stores/authStore';
-
-function LocationDisplay() {
-  const location = useLocation();
-  return <div data-testid="location">{location.pathname}</div>;
-}
-
-describe('AuthForm demo bypass', () => {
-  beforeEach(() => {
-    useAuthStore.setState(
-      {
-        userId: null,
-        username: null,
-        email: null,
-        avatarUrl: null,
-        provider: null,
-        isLoggedIn: false,
-      },
-      false
-    );
-  });
-
-  it('calls loginDemo and does not call onSubmit in demo mode', async () => {
-    const user = userEvent.setup();
-    const onSubmit = vi.fn();
-
-    const loginDemoSpy = vi.spyOn(useAuthStore.getState(), 'loginDemo');
-
+describe('AuthForm UI', () => {
+  it('does not show Google or Demo auth, and supports register toggle', () => {
     render(
-      <MemoryRouter initialEntries={['/login']}>
-        <Routes>
-          <Route
-            path="/login"
-            element={
-              <>
-                <AuthForm onSubmit={onSubmit} initialMode="login" />
-                <LocationDisplay />
-              </>
-            }
-          />
-          <Route path="/chat" element={<LocationDisplay />} />
-        </Routes>
+      <MemoryRouter>
+        <AuthForm onSubmit={() => {}} initialMode="login" />
       </MemoryRouter>
     );
 
-    await user.click(screen.getByRole('button', { name: /demo login/i }));
+    expect(screen.queryByRole('button', { name: /continue with google/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /demo login/i })).not.toBeInTheDocument();
 
-    await user.type(screen.getByLabelText('Email'), 'demo@example.com');
+    expect(screen.getByRole('button', { name: /password/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /magic/i })).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /enter demo/i }));
-
-    expect(onSubmit).not.toHaveBeenCalled();
-    expect(loginDemoSpy).toHaveBeenCalledWith('demo', 'demo@example.com');
-
-    const loc = screen.getByTestId('location');
-    expect(loc.textContent).toBe('/chat');
+    expect(screen.getByRole('button', { name: /don't have an account\? register/i })).toBeInTheDocument();
   });
 });

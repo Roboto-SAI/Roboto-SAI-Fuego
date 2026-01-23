@@ -2,25 +2,29 @@
  * Auth tests - RequireAuth redirect and login flows
  */
 
-import { describe, it, expect, vi, type Mock } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { RequireAuth } from '@/components/auth/RequireAuth';
 import { useAuthStore } from '@/stores/authStore';
 
-const mockedUseAuthStore = useAuthStore as unknown as Mock;
-
-// Mock Zustand auth store
-vi.mock('@/stores/authStore', () => ({
-  useAuthStore: vi.fn(),
-}));
+beforeEach(() => {
+  useAuthStore.setState(
+    {
+      userId: null,
+      username: null,
+      email: null,
+      avatarUrl: null,
+      provider: null,
+      isLoggedIn: false,
+    },
+    false
+  );
+});
 
 describe('RequireAuth', () => {
   it('should redirect to /login when not authenticated', async () => {
-    // Mock unauthenticated state
-    mockedUseAuthStore.mockReturnValue({
-      isLoggedIn: false,
-    });
+    useAuthStore.setState({ isLoggedIn: false }, false);
 
     render(
       <MemoryRouter initialEntries={['/chat']}>
@@ -45,10 +49,7 @@ describe('RequireAuth', () => {
   });
 
   it('should render protected content when authenticated', async () => {
-    // Mock authenticated state
-    mockedUseAuthStore.mockReturnValue({
-      isLoggedIn: true,
-    });
+    useAuthStore.setState({ isLoggedIn: true }, false);
 
     render(
       <MemoryRouter initialEntries={['/chat']}>
@@ -73,9 +74,7 @@ describe('RequireAuth', () => {
   });
 
   it('should not render anything initially when not authenticated', () => {
-    mockedUseAuthStore.mockReturnValue({
-      isLoggedIn: false,
-    });
+    useAuthStore.setState({ isLoggedIn: false }, false);
 
     render(
       <MemoryRouter initialEntries={['/chat']}>
@@ -94,22 +93,5 @@ describe('RequireAuth', () => {
 
     // Should not render protected content before redirect
     expect(screen.queryByText('Protected Content')).not.toBeInTheDocument();
-  });
-});
-
-describe('Demo mode', () => {
-  it('should allow demo login without backend session', () => {
-    const mockLogin = vi.fn();
-    mockedUseAuthStore.mockReturnValue({
-      isLoggedIn: false,
-      login: mockLogin,
-    });
-
-    // Simulate demo login
-    const username = 'testuser';
-    const email = 'test@example.com';
-    mockLogin(username, email);
-
-    expect(mockLogin).toHaveBeenCalledWith(username, email);
   });
 });

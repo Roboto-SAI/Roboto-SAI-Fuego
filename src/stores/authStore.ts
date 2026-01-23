@@ -18,6 +18,39 @@ type MeResponse = {
   user?: AuthUser;
 };
 
+type PersistedAuthState = {
+  userId: string | null;
+  username: string | null;
+  email: string | null;
+  avatarUrl: string | null;
+  provider: string | null;
+  isLoggedIn: boolean;
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
+
+const coercePersistedAuthState = (value: unknown): PersistedAuthState => {
+  if (!isRecord(value)) {
+    return {
+      userId: null,
+      username: null,
+      email: null,
+      avatarUrl: null,
+      provider: null,
+      isLoggedIn: false,
+    };
+  }
+
+  return {
+    userId: typeof value.userId === 'string' ? value.userId : null,
+    username: typeof value.username === 'string' ? value.username : null,
+    email: typeof value.email === 'string' ? value.email : null,
+    avatarUrl: typeof value.avatarUrl === 'string' ? value.avatarUrl : null,
+    provider: typeof value.provider === 'string' ? value.provider : null,
+    isLoggedIn: value.isLoggedIn === true,
+  };
+};
+
 const getApiBaseUrl = (): string => {
   const envUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '';
   const trimmed = envUrl.replace(/\/+$/, '');
@@ -33,21 +66,17 @@ interface AuthState {
   provider: string | null;
   isLoggedIn: boolean;
 
-  // Client-side demo
-  loginDemo: (username: string, email?: string | null) => void;
   loginWithPassword: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string) => Promise<void>;
-  startGoogleSignIn: () => void;
 
   // Real backend session auth
   refreshSession: () => Promise<boolean>;
-  startGoogleSignIn: () => void;
   requestMagicLink: (email: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>()(
-  persist(
+  persist<AuthState, [], [], PersistedAuthState>(
     (set) => ({
       userId: null,
       username: null,
@@ -55,11 +84,6 @@ export const useAuthStore = create<AuthState>()(
       avatarUrl: null,
       provider: null,
       isLoggedIn: false,
-
-      loginDemo: (username: string, email?: string | null) => {
-        const userId = username.toLowerCase().replaceAll(/\s+/g, '_').slice(0, 64);
-        set({ userId, username, email: email || null, isLoggedIn: true, provider: 'demo' });
-      },
 
       refreshSession: async () => {
         const apiBaseUrl = getApiBaseUrl();
@@ -88,12 +112,6 @@ export const useAuthStore = create<AuthState>()(
           set({ userId: null, username: null, email: null, avatarUrl: null, provider: null, isLoggedIn: false });
           return false;
         }
-      },
-
-      startGoogleSignIn: () => {
-        const rawBase = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || 'http://localhost:5000';
-        const base = rawBase.replace(/\/+$/, '').endsWith('/api') ? rawBase.replace(/\/+$/, '').slice(0, -4) : rawBase.replace(/\/+$/, '');
-        globalThis.location.href = `${base}/api/auth/google`;
       },
 
       register: async (email: string, password: string) => {
@@ -153,6 +171,24 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'robo-auth',
+      version: 2,
+      migrate: (persistedState, _version) => {
+        const envelope = isRecord(persistedState) ? persistedState : null;
+        const rawState = envelope && isRecord(envelope.state) ? envelope.state : persistedState;
+
+        const parsed = coercePersistedAuthState(rawState);
+        if (parsed.provider === 'demo') {
+          return {
+            userId: null,
+            username: null,
+            email: null,
+            avatarUrl: null,
+            provider: null,
+            isLoggedIn: false,
+          };
+        }
+        return parsed;
+      },
       partialize: (state) => ({
         userId: state.userId,
         username: state.username,
