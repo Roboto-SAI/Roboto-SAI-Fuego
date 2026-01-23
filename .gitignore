@@ -30,6 +30,7 @@ backend/.venv/
 backend/venv*/
 backend/.mypy_cache/
 backend/.pytest_cache/
+Future Backend adds/
 
 # Github
 .github/*
