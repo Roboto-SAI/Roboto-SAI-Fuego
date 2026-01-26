@@ -6,59 +6,120 @@ Created by Roberto Villarreal Martinez
 🚀 Hyperspeed Evolution Backend - Quantum-Entangled API
 """
 
+print("DEBUG: main.py module loading started")
+
 import os
+print("DEBUG: os imported")
+
 import logging
+print("DEBUG: logging imported")
+
 import asyncio
+print("DEBUG: asyncio imported")
+
 import json
+print("DEBUG: json imported")
+
 import secrets
+print("DEBUG: secrets imported")
+
 import hashlib
+print("DEBUG: hashlib imported")
+
 from urllib.parse import urlencode
+print("DEBUG: urlencode imported")
+
 from typing import Dict, Any, Optional
+print("DEBUG: typing imported")
+
 from datetime import datetime, timedelta, timezone
+print("DEBUG: datetime imported")
+
 from contextlib import asynccontextmanager
+print("DEBUG: asynccontextmanager imported")
 
 # Configure logging EARLY
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
+print("DEBUG: logging configured")
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect, Depends, Request
+print("DEBUG: fastapi imported")
+
 from fastapi.responses import JSONResponse, RedirectResponse
+print("DEBUG: fastapi responses imported")
+
 from fastapi.middleware.cors import CORSMiddleware
+print("DEBUG: cors middleware imported")
+
 from pydantic import BaseModel
+print("DEBUG: pydantic imported")
+
 # from sqlalchemy import select
 # from sqlalchemy.ext.asyncio import AsyncSession  # Deprecated
 import httpx
+print("DEBUG: httpx imported")
+
 import websockets
+print("DEBUG: websockets imported")
+
 from dotenv import load_dotenv
+print("DEBUG: dotenv imported")
+
 import uuid
+print("DEBUG: uuid imported")
 
 # LangChain imports
 from langchain_core.runnables import RunnableLambda, RunnablePassthrough
+print("DEBUG: langchain_core imported")
+
 from langchain_core.messages import HumanMessage, AIMessage
+print("DEBUG: langchain messages imported")
 
 from dotenv import load_dotenv
+print("DEBUG: dotenv re-imported")
+
 import os
+print("DEBUG: os re-imported")
 
 # Load local .env when running outside Docker
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '..', '.env'))
+print("DEBUG: dotenv loaded")
 
 # Import Roboto SAI SDK (optional) - updated for proper package structure
 try:
     from roboto_sai_sdk import RobotoSAIClient, get_xai_grok
     HAS_SDK = True
-except ImportError:
+    print("DEBUG: SDK imported successfully")
+except ImportError as e:
+    print(f"DEBUG: SDK import failed: {e}")
     logger.warning("roboto_sai_sdk not available, using fallback implementations")
     HAS_SDK = False
     RobotoSAIClient = None
     get_xai_grok = None
 
+print("DEBUG: Starting local module imports")
+
 # Import local modules
 from advanced_emotion_simulator import AdvancedEmotionSimulator
+print("DEBUG: AdvancedEmotionSimulator imported")
+
 from grok_llm import GrokLLM
+print("DEBUG: GrokLLM imported")
+
 from memory_system import SupabaseMessageHistory
+print("DEBUG: SupabaseMessageHistory imported")
+
 from utils.supabase_client import get_supabase_client
+print("DEBUG: get_supabase_client imported")
+
 from db import init_db
+print("DEBUG: init_db imported")
+
 from real_time_data_system import run_supabase_async
+print("DEBUG: run_supabase_async imported")
+
+print("DEBUG: All imports completed, starting FastAPI app creation")
 
 # Global client instance
 roboto_client: Optional[Any] = None  # Optional[RobotoSAIClient]
