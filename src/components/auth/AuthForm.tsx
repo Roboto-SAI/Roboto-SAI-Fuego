@@ -158,7 +158,7 @@ const PasswordForm = (props: {
   const submitLabel = props.mode === 'login' ? 'Sign In' : 'Create Account';
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form method="post" onSubmit={handleSubmit} className="space-y-4">
       <AnimatePresence mode="wait">
         <motion.div
           key={props.mode}
