@@ -24,7 +24,11 @@ const queryClient = new QueryClient();
 
 const isGitHubPagesHost = () => {
   if (globalThis.window === undefined) return false;
-  return globalThis.window.location.hostname.endsWith("github.io");
+  const allowedGitHubPagesHosts = [
+    "robotosai.github.io",
+  ];
+  const hostname = globalThis.window.location.hostname;
+  return allowedGitHubPagesHosts.includes(hostname);
 };
 
 const Router = isGitHubPagesHost() ? HashRouter : BrowserRouter;
