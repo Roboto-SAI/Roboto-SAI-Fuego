@@ -32,10 +32,9 @@ RUN if [ -f /app/sdk/roboto-sai-sdk/pyproject.toml ] || [ -f /app/sdk/roboto-sai
             exit 1; \
         fi
 
-# Copy backend code and entrypoint script
+# Copy backend code and bootstrap script
 COPY backend/ .
-COPY backend/entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh
+COPY backend/bootstrap.py /app/bootstrap.py
 
 WORKDIR /app/backend
 
@@ -44,7 +43,7 @@ EXPOSE 5000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/health').read()"
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/health').read()" || exit 1
 
-# Use entrypoint script for better error handling and logging
-ENTRYPOINT ["/app/entrypoint.sh"]
+# Use Python bootstrap script for startup with better diagnostics
+CMD ["python", "/app/bootstrap.py"]
