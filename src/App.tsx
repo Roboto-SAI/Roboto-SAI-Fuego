@@ -28,6 +28,7 @@ const isGitHubPagesHost = () => {
 };
 
 // Force rebuild
+const Router = HashRouter;
 
 const App = () => {
   const refreshSession = useAuthStore((state) => state.refreshSession);
