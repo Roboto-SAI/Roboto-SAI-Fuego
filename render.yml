@@ -1,25 +1,26 @@
-services:
-  - type: web
-    name: roboto-sai-frontend
-    runtime: node
-    plan: starter
-    buildCommand: npm ci --legacy-peer-deps && npm run build
-    startCommand: npm run preview -- --host 0.0.0.0 --port $PORT
-    envVars:
-      - key: VITE_API_URL
-        value: https://roboto-sai-backend.onrender.com
-    staticPublishPath: dist
-    routes:
-      - path: "/"
-        destination: "/index.html"
+previews:
+  generation: automatic
 
+services:
   - type: web
     name: roboto-sai-backend
     runtime: python
     pythonVersion: 3.13
     plan: starter
-    buildCommand: pip install --no-cache-dir -r backend/requirements.txt && pip install --no-cache-dir -e sdk/roboto-sai-sdk
-    startCommand: mkdir -p /var/data && cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT
+    branch: main
+    buildCommand: |
+      python -m pip install --upgrade pip
+      pip install --no-cache-dir -r backend/requirements.txt
+      # If SDK is provided as an editable package in-repo, install it (no-op if not present)
+      pip install --no-cache-dir -e sdk/roboto-sai-sdk || true
+    startCommand: |
+      mkdir -p /var/data
+      cd backend
+      uvicorn main:app --host 0.0.0.0 --port $PORT
+    disk:
+      name: data
+      mountPath: /var/data
+      sizeGB: 1
     envVars:
       - key: XAI_API_KEY
         sync: false
@@ -36,18 +37,45 @@ services:
       - key: SESSION_TTL_SECONDS
         value: "2592000"
       - key: PYTHON_ENV
-        value: production
+        value: "production"
       - key: ROBO_EMOTION_STATE_PATH
-        value: /var/data/emotion_state.json
+        value: "/var/data/emotion_state.json"
     healthCheckPath: /api/health
     healthCheckStartupFailureThreshold: 10
+    autoDeployTrigger: 'on'
+
+  - type: web
+    name: roboto-sai-frontend
+    runtime: node
+    plan: starter
+    branch: main
+    buildCommand: npm ci --legacy-peer-deps && npm run build
+    startCommand: npm run preview -- --host 0.0.0.0 --port $PORT
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://roboto-sai-backend.onrender.com
+    routes:
+      - path: "/"
+        destination: "/index.html"
+    autoDeployTrigger: 'on'
 
   - type: redis
     name: roboto-sai-redis
     plan: starter
     ipAllowList: []
 
+# Recommended managed Postgres for production (optional)
 databases:
-  - name: roboto-sai-sqlite
+  - name: roboto-sai-postgres
     databaseName: roboto_sai
     plan: starter
+
+envVarGroups:
+  - name: roboto-secrets
+    envVars:
+      - key: STRIPE_API_KEY
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+
