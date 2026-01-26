@@ -497,16 +497,6 @@ async def get_status() -> Dict[str, Any]:
         "hyperspeed_evolution": True
     }
 
-@app.get("/health", tags=["Health"])
-async def simple_health_check() -> Dict[str, str]:
-    """Simple health check for Render"""
-    return {"status": "healthy", "service": "roboto-sai-2026"}
-
-@app.get("/api/health", tags=["Health"])
-async def health_check() -> Dict[str, str]:
-    """Simple health check"""
-    return {"status": "healthy", "service": "roboto-sai-2026"}
-
 # Emotion Endpoints
 @app.post("/api/emotion/simulate", tags=["Emotion"])
 async def simulate_emotion(request: EmotionSimRequest) -> Dict[str, Any]:
