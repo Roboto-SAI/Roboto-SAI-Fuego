@@ -37,7 +37,15 @@ class GrokLLM(LLM):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        object.__setattr__(self, 'client', get_xai_grok())
+        # Only initialize client if SDK is available
+        if HAS_SDK and get_xai_grok is not None:
+            try:
+                object.__setattr__(self, 'client', get_xai_grok())
+            except Exception as e:
+                logger.warning(f"Failed to initialize Grok client: {e}")
+                object.__setattr__(self, 'client', None)
+        else:
+            object.__setattr__(self, 'client', None)
         # Extract Responses API params if provided
         if 'previous_response_id' in kwargs:
             self.previous_response_id = kwargs.pop('previous_response_id')
