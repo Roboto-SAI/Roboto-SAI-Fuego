@@ -32,8 +32,8 @@ RUN if [ -f /app/sdk/roboto-sai-sdk/pyproject.toml ] || [ -f /app/sdk/roboto-sai
             exit 1; \
         fi
 
-# Copy backend code
-COPY backend/ .
+# Copy backend code into its directory so module imports resolve
+COPY backend/ /app/backend/
 
 WORKDIR /app/backend
 

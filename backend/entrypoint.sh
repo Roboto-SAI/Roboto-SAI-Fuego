@@ -13,7 +13,6 @@ echo "- FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-(not set)}"
 # Try to import main module to catch import errors early
 echo ""
 echo "Checking Python imports..."
-python -c "from backend.main import app; print('✅ main.app imported successfully')" 2>&1 || \
 python -c "from main import app; print('✅ main.app imported successfully')" 2>&1 || \
 { echo "❌ Failed to import main.app"; exit 1; }
 
