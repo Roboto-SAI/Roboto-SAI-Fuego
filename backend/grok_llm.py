@@ -4,6 +4,7 @@ Adapts Roboto SAI SDK to LangChain's LLM interface.
 """
 
 import asyncio
+import os
 from typing import Any, List, Optional, Dict
 from langchain_core.callbacks import CallbackManagerForLLMRun
 from langchain_core.language_models import LLM
@@ -82,6 +83,9 @@ class GrokLLM(LLM):
             result["success"] = bool(result.get("response"))
         if "response_id" not in result and "id" in result:
             result["response_id"] = result["id"]
+        if result.get("success") and not result.get("response_id"):
+            result["success"] = False
+            result["error"] = "Roboto SAI not available: XAI connection failed"
         return result
 
     def _invoke_grok_client(
@@ -92,7 +96,11 @@ class GrokLLM(LLM):
         emotion: str,
         user_name: str,
     ) -> Dict[str, Any]:
+        if not os.getenv("XAI_API_KEY"):
+            return {"success": False, "error": "Roboto SAI not available: XAI_API_KEY not configured"}
         client = self.client
+        if hasattr(client, "available") and not getattr(client, "available"):
+            return {"success": False, "error": "Roboto SAI not available: XAI connection failed"}
         if hasattr(client, "roboto_grok_chat"):
             result = client.roboto_grok_chat(
                 user_message=user_message,
