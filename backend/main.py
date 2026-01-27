@@ -665,6 +665,8 @@ async def chat_with_grok(
     """
     Chat with xAI Grok using Roboto SAI context with LangChain memory
     """
+    if not os.getenv("XAI_API_KEY"):
+        raise HTTPException(status_code=503, detail="Roboto SAI not available: XAI_API_KEY not configured")
     if not grok_llm or not xai_grok or not xai_grok.available:
         raise HTTPException(status_code=503, detail="Grok not available")
     
@@ -713,6 +715,8 @@ async def chat_with_grok(
             user_name=user.get('user_metadata', {}).get('name', 'user'),
             previous_response_id=request.previous_response_id
         )
+        if not grok_result.get("success"):
+            raise HTTPException(status_code=503, detail=grok_result.get("error", "Roboto SAI not available"))
         response_text = grok_result.get('response', '')
         response_id = grok_result.get('response_id')
         encrypted_thinking = grok_result.get('encrypted_thinking')
