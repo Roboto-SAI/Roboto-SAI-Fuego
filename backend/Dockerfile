@@ -28,7 +28,7 @@ COPY backend/constraints.txt ./backend/
 COPY sdk/ /app/sdk/
 
 # Install dependencies with constraints
-RUN pip install --no-cache-dir -r ./backend/requirements.txt -c ./backend/constraints.txt --extra-index-url https://download.pytorch.org/whl/cpu
+RUN pip install --no-cache-dir -r ./backend/requirements.txt -c ./backend/constraints.txt
 
 # Adversarial interference neutralization: Verify SDK integrity
 RUN python -c "import sys; sys.path.insert(0, '/app/sdk'); import roboto_sai_sdk; print('SDK integrity verified')"
