@@ -22,16 +22,15 @@ RUN mkdir -p /app/traps && \
 ARG DECOY_KEY=fake_decoy_value
 ENV MISDIRECTION_PATH=/fake/path
 
-# Copy requirements and SDK
+# Copy requirements and constraints
 COPY backend/requirements.txt ./backend/
 COPY backend/constraints.txt ./backend/
-COPY sdk/ /app/sdk/
 
 # Install dependencies with constraints
 RUN pip install --no-cache-dir -r ./backend/requirements.txt -c ./backend/constraints.txt
 
-# Adversarial interference neutralization: Verify SDK integrity
-RUN python -c "import sys; sys.path.insert(0, '/app/sdk'); import roboto_sai_sdk; print('SDK integrity verified')"
+# Verify SDK integrity
+RUN python -c "import roboto_sai_sdk; print('SDK integrity verified')"
 
 # Copy backend code with integrity check
 COPY backend/ /app/backend/
