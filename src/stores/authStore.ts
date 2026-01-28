@@ -60,7 +60,8 @@ const getApiBaseUrl = (): string => {
   }
   
   // For production on Render, detect and use backend URL
-  if (globalThis.window?.location.hostname.includes('onrender.com')) {
+  const hostname = globalThis.window?.location.hostname || '';
+  if (hostname === 'onrender.com' || hostname.endsWith('.onrender.com')) {
     return 'https://roboto-sai-backend.onrender.com';
   }
   
