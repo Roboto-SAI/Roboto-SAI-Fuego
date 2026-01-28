@@ -281,9 +281,11 @@ app.add_middleware(
 @app.get("/health")
 async def health_check():
     """Health check endpoint for Render deployment and monitoring"""
+    logger.info("Health check called")
     return {
         "status": "healthy",
         "service": "roboto-sai-2026",
+        "version": "0.1.0",
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "ready": True
     }
