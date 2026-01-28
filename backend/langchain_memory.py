@@ -10,7 +10,6 @@ from datetime import datetime
 
 from langchain_core.chat_history import BaseChatMessageHistory
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
-from langchain_core.pydantic_v1 import BaseModel
 
 from db import get_supabase_client
 
@@ -32,7 +31,6 @@ class SupabaseMessageHistory(BaseChatMessageHistory):
 
     @property
     def messages(self) -> List[BaseMessage]:
-        import asyncio
         loop = asyncio.new_event_loop()
         try:
             result = loop.run_until_complete(self._get_messages_async())
@@ -125,7 +123,6 @@ class SupabaseMessageHistory(BaseChatMessageHistory):
         await asyncio.to_thread(query.execute)
 
     def __len__(self) -> int:
-        import asyncio
         loop = asyncio.new_event_loop()
         try:
             return loop.run_until_complete(self._len_async())

@@ -37,7 +37,7 @@ services:
         value: "true"
       - key: COOKIE_SAMESITE
         value: "none"
-    healthCheckPath: /health
+    healthCheckPath: /api/health
     autoDeployTrigger: commit
 
   - type: web
