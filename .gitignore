@@ -28,7 +28,7 @@ tsconfig.node.tsbuildinfo
 .lovable/*
 .vs/*
 .vs\*
-
+.vs
 
 # Backend
 BackendAdds/*
@@ -63,6 +63,13 @@ backend_env_vars.json
 !backend_env_vars.example.json
 backend_env_vars.*.secret.json
 backend_env_vars.*.local.json
+backend_*.json
+backend_*_*.json
+
+# Frontend env vars (do NOT commit real values)
+frontend_env_vars.json
+frontend_*.json
+frontend_*_*.json
 
 # Roboto AI API keys
 .Roboto
