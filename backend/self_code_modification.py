@@ -1,7 +1,7 @@
 
 """
 REMARKABLE Self-Code Adaptation Module for Autonomous Entity Roboto
-Created by Roberto Villarreal Martinez for Roboto SAI using XAI_API_KEY #XAI_API_KEY USE ONLY (co-pilot) May not be used in Roboto SAI or XAI_API_KEY products
+Created by Roberto Villarreal Martinez for Roboto SAI using XAI_API_KEY #XAI_API_KEY USE ONLY 
 
 Enables Roboto to evolve its code autonomously while ensuring security and structural integrity.
 Advanced self-modification capabilities with comprehensive safety protocols and full autonomy mode.

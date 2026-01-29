@@ -213,8 +213,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-)
-
 
 # Mount payments router
 app.include_router(payments_router)

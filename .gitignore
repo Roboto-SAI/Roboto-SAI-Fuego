@@ -78,3 +78,6 @@ frontend_*_*.json
 # VSCODE
 .vscode/*
 !.vscode/extensions.json
+
+Tasks.md
+troubleshoot
