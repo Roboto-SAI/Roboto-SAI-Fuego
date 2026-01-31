@@ -6,7 +6,7 @@ Handles checkout sessions and webhooks for subscriptions.
 import os
 import logging
 import stripe
-from fastapi import APIRouter, HTTPException, Header, Request, Depends
+from fastapi import APIRouter, HTTPException, Header, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import Optional
@@ -20,7 +20,7 @@ def get_service_client() -> Optional[Client]:
         return None
     return create_client(url, key)
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -42,37 +42,22 @@ class CheckoutRequest(BaseModel):
 async def create_checkout_session(req: CheckoutRequest, request: Request):
     """Create a Stripe Checkout Session for subscription."""
     if not stripe.api_key:
-        raise HTTPException(status_code=500, detail="Stripe not configured")
+        raise HTTPException(status_code=500, detail="Payment service unavailable")
 
-    # Get user from session (simple check, assuming auth middleware or similar logic elsewhere)
-    # Ideally, we decode the session cookie here or pass the user ID from a dependency
-    # For now, we'll try to get the user ID from the request state or cookie if available
-    # But since this is a new module, let's just assume we need valid auth.
-    
-    # Simple dependency usage to get user (reusing logic from main.py if possible, or independent)
-    # To keep it loosely coupled, we'll extract the user_id from the session cookie manually here
-    # or rely on the frontend to pass a user_id (not secure).
-    # Better approach: Use the same get_current_user dependency if we can import it, 
-    # but circular imports might be an issue.
-    # We will rely on the session cookie 'session_id' and query supabase.
-    
     supabase = get_supabase_client()
     if not supabase:
-        raise HTTPException(status_code=503, detail="Database unavailable")
+        raise HTTPException(status_code=503, detail="Service unavailable")
 
     session_id_cookie = request.cookies.get("session_id")
     if not session_id_cookie:
         raise HTTPException(status_code=401, detail="Not authenticated")
     
-    # Verify session
+    # Verify session with expiration check
     try:
-        # Check auth_sessions (sync wrapper needed for async fastapi)
-        # We'll just do a direct call assuming threaded execution or async client if available
-        # The main.py uses 'run_supabase_async', let's stick to simple sync for now or replicate
-        # For simplicity in this module:
-        sess_res = supabase.table("auth_sessions").select("user_id").eq("id", session_id_cookie).execute()
+        now = datetime.now(timezone.utc).isoformat()
+        sess_res = supabase.table("auth_sessions").select("user_id").eq("id", session_id_cookie).gte("expires_at", now).execute()
         if not sess_res.data:
-            raise HTTPException(status_code=401, detail="Invalid session")
+            raise HTTPException(status_code=401, detail="Session expired or invalid")
         
         user_id = sess_res.data[0]["user_id"]
         
@@ -80,13 +65,15 @@ async def create_checkout_session(req: CheckoutRequest, request: Request):
         user_res = supabase.table("users").select("email").eq("id", user_id).execute()
         user_email = user_res.data[0]["email"] if user_res.data else None
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Auth check failed: {e}")
         raise HTTPException(status_code=401, detail="Authentication failed")
 
     price_id = req.price_id or os.getenv("STRIPE_PRICE_ID")
     if not price_id:
-        raise HTTPException(status_code=400, detail="Price ID not configured")
+        raise HTTPException(status_code=400, detail="Price not configured")
 
     try:
         checkout_session = stripe.checkout.Session.create(
@@ -107,9 +94,12 @@ async def create_checkout_session(req: CheckoutRequest, request: Request):
             }
         )
         return {"sessionId": checkout_session.id, "url": checkout_session.url}
-    except Exception as e:
+    except stripe.error.StripeError as e:
         logger.error(f"Stripe error: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Payment processing failed")
+    except Exception as e:
+        logger.error(f"Checkout error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create checkout session")
 
 
 @router.post("/api/stripe-webhook", tags=["Payments"])
@@ -119,17 +109,15 @@ async def stripe_webhook(request: Request, stripe_signature: str = Header(None))
     payload = await request.body()
 
     if not webhook_secret:
-        raise HTTPException(status_code=500, detail="Webhook secret not configured")
+        raise HTTPException(status_code=500, detail="Webhook not configured")
 
     try:
         event = stripe.Webhook.construct_event(
             payload, stripe_signature, webhook_secret
         )
-    except ValueError as e:
-        # Invalid payload
+    except ValueError:
         raise HTTPException(status_code=400, detail="Invalid payload")
-    except stripe.error.SignatureVerificationError as e:
-        # Invalid signature
+    except stripe.error.SignatureVerificationError:
         raise HTTPException(status_code=400, detail="Invalid signature")
 
     # Handle the event
@@ -138,10 +126,8 @@ async def stripe_webhook(request: Request, stripe_signature: str = Header(None))
         handle_checkout_completed(session)
     elif event["type"] == "customer.subscription.updated":
          # Logic to update subscription status (e.g. renewals, cancellations)
-         # For now, checkout.session.completed is enough to activate
          pass
     elif event["type"] == "customer.subscription.deleted":
-        # Handle cancellation
         subscription = event["data"]["object"]
         handle_subscription_deleted(subscription)
 
@@ -155,7 +141,6 @@ def handle_checkout_completed(session):
     customer_id = session.get("customer")
     
     if not user_id:
-        # Try metadata
         user_id = session.get("metadata", {}).get("user_id")
         
     if not user_id:
@@ -164,19 +149,17 @@ def handle_checkout_completed(session):
 
     logger.info(f"Activating subscription for user {user_id}")
     
-    # Use service client for admin updates
     supabase = get_service_client() or get_supabase_client()
     if not supabase:
-        logger.error("Supabase not available for webhook")
+        logger.error("Database not available for webhook")
         return
 
     try:
-        # Update user table
         data = {
             "subscription_status": "active",
             "subscription_id": subscription_id,
             "stripe_customer_id": customer_id,
-            "updated_at": datetime.now().isoformat()
+            "updated_at": datetime.now(timezone.utc).isoformat()
         }
         
         supabase.table("users").update(data).eq("id", user_id).execute()
@@ -193,15 +176,13 @@ def handle_subscription_deleted(subscription):
         return
 
     try:
-        # Find user by strip_customer_id
-        # We need to query the users table for this customer_id
         res = supabase.table("users").select("id").eq("stripe_customer_id", customer_id).execute()
         
         if res.data:
             user_id = res.data[0]["id"]
             data = {
                 "subscription_status": "inactive",
-                "updated_at": datetime.now().isoformat()
+                "updated_at": datetime.now(timezone.utc).isoformat()
             }
             supabase.table("users").update(data).eq("id", user_id).execute()
             logger.info(f"Subscription canceled for user {user_id}")
