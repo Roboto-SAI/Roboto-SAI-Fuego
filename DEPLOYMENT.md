@@ -1,5 +1,15 @@
 # Roboto SAI Deployment Guide for Render
 
+## ?? CRITICAL: render.yaml Must Include dockerContext
+
+**The #1 cause of deployment failures is missing `dockerContext` in render.yaml!**
+
+Ensure your `render.yaml` backend service includes:
+```yaml
+dockerfilePath: ./backend/Dockerfile
+dockerContext: ./backend  # ? CRITICAL: Must be set!
+```
+
 ## Prerequisites
 
 1. **Supabase Project**
@@ -72,12 +82,15 @@ NODE_ENV=production
 
 ### Backend Docker Build Fails
 - **Error: "requirements.txt not found" or "constraints.txt not found"**
-  - Ensure you're using the latest `backend/Dockerfile` which doesn't require constraints.txt
-  - Verify `dockerContext: ./backend` in render.yaml
+  - ? **FIXED**: Ensure `dockerContext: ./backend` is set in render.yaml (THIS IS THE FIX!)
+  - Verify `dockerfilePath: ./backend/Dockerfile` in render.yaml
   - Check that `backend/requirements.txt` exists in your repo
+  - The Dockerfile now works without constraints.txt
 - **Error: "roboto-sai-sdk" fails to install**
   - SDK is optional - build will continue
   - Verify your repo has access to the SDK GitHub repo if needed
+- **Error: Module import errors after build**
+  - Verify `PYTHONPATH=/app` in render.yaml (not `/app/backend`)
 
 ### Frontend Fails to Build
 - Verify `VITE_SUPABASE_URL` is set during build

@@ -8,6 +8,7 @@ services:
     plan: starter
     branch: main
     dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
     disk:
       name: data
       mountPath: /var/data
@@ -32,7 +33,7 @@ services:
       - key: ROBO_EMOTION_STATE_PATH
         value: "/var/data/emotion_state.json"
       - key: PYTHONPATH
-        value: "/app/backend"
+        value: "/app"
       - key: COOKIE_SECURE
         value: "true"
       - key: COOKIE_SAMESITE
