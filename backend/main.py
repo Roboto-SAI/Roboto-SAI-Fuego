@@ -49,13 +49,13 @@ except ImportError as e:
     RobotoSAIClient = None
     get_xai_grok = None
 
-# Import local modules
-from .advanced_emotion_simulator import AdvancedEmotionSimulator
-from .grok_llm import GrokLLM
-from .langchain_memory import SupabaseMessageHistory
-from .utils.supabase_client import get_supabase_client
-from .db import init_db
-from .payments import router as payments_router
+# Import local modules (absolute imports since main.py is at /app root after Docker copy)
+from advanced_emotion_simulator import AdvancedEmotionSimulator
+from grok_llm import GrokLLM
+from langchain_memory import SupabaseMessageHistory
+from utils.supabase_client import get_supabase_client
+from db import init_db
+from payments import router as payments_router
 
 # Global client instance
 roboto_client: Optional[Any] = None
