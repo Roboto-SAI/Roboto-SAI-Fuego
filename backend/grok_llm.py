@@ -295,20 +295,35 @@ class GrokLLM(LLM):
             error_detail = ""
             try:
                 error_detail = e.response.json()
-            except:
+            except:  # noqa: E722
                 error_detail = e.response.text
-            
-            logger.error(f"Grok API HTTP error {e.response.status_code}: {error_detail}")
-            return {"success": False, "error": f"Grok API HTTP error: {e.response.status_code} - {error_detail}"}
+
+            # Log full details server-side, but return a generic message to the client
+            logger.error(f"Grok API HTTP error {e.response.status_code}: {error_detail}", exc_info=True)
+            return {
+                "success": False,
+                "error": "Grok service returned an error. Please try again later.",
+            }
         except httpx.ReadTimeout:
-            logger.error("Grok API request timed out")
-            return {"success": False, "error": "Grok API request timed out. The model is taking too long to respond."}
+            logger.error("Grok API request timed out", exc_info=True)
+            return {
+                "success": False,
+                "error": "Grok service is taking too long to respond. Please try again later.",
+            }
         except httpx.HTTPError as e:
-            logger.error(f"Grok API connection error: {e}")
-            return {"success": False, "error": f"Grok API connection error: {str(e)}"}
+            # Connection and protocol-related errors
+            logger.error(f"Grok API connection error: {e}", exc_info=True)
+            return {
+                "success": False,
+                "error": "Unable to reach Grok service at the moment. Please try again later.",
+            }
         except Exception as e:
+            # Catch-all for any other unexpected errors
             logger.error(f"Grok API unexpected error: {e}", exc_info=True)
-            return {"success": False, "error": f"Failed to call Grok API: {str(e)}"}
+            return {
+                "success": False,
+                "error": "Failed to call Grok service due to an unexpected error.",
+            }
     
     def _try_alternate_grok_endpoint(
         self,
