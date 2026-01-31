@@ -765,6 +765,59 @@ async def get_emotion_stats() -> Dict[str, Any]:
         "timestamp": datetime.now().isoformat()
     }
 
+def _compute_emotion(text: str, intensity: int = 5, blend_threshold: float = 0.8, holistic_influence: bool = False, cultural_context=None) -> Optional[Dict[str, Any]]:
+    """Compute emotion using the emotion simulator with safe exception handling.
+
+    Uses `safe_simulate_emotion` when available (demo mode compatibility).
+    """
+    if not emotion_simulator:
+        return None
+    try:
+        if hasattr(emotion_simulator, "safe_simulate_emotion"):
+            emotion_text = emotion_simulator.safe_simulate_emotion(
+                event=text,
+                intensity=intensity,
+                blend_threshold=blend_threshold,
+                holistic_influence=holistic_influence,
+                cultural_context=cultural_context,
+            )
+        else:
+            emotion_text = emotion_simulator.simulate_emotion(
+                event=text,
+                intensity=intensity,
+                blend_threshold=blend_threshold,
+                holistic_influence=holistic_influence,
+                cultural_context=cultural_context,
+            )
+
+        base_emotion = emotion_simulator.get_current_emotion()
+        probabilities = emotion_simulator.get_emotion_probabilities(text)
+        return {
+            "emotion": base_emotion,
+            "emotion_text": emotion_text,
+            "probabilities": probabilities,
+        }
+    except Exception as e:
+        logger.warning(f"Emotion simulation failed: {e}")
+        return None
+
+
+async def _store_response_metadata(assistant_message_id: Optional[str], response_id: Optional[str], encrypted_thinking: Optional[str]) -> None:
+    """Store response metadata (response_id and encrypted thinking) in Supabase safely."""
+    try:
+        if not response_id or not assistant_message_id:
+            return
+        supabase = get_supabase_client()
+        if not supabase:
+            return
+        await run_supabase_async(lambda: supabase.table('messages').update({
+            'xai_response_id': response_id,
+            'xai_encrypted_thinking': encrypted_thinking
+        }).eq('id', assistant_message_id).execute())
+    except Exception as e:
+        logger.warning(f'Failed to store response_id: {e}')
+
+
 # Chat Endpoints
 @app.post("/api/chat", tags=["Chat"])
 @limiter.limit("30/minute")
@@ -882,24 +935,7 @@ async def chat_with_grok(
         session_id = chat_request.session_id or "default"
 
         # Compute user emotion
-        if emotion_simulator:
-            try:
-                emotion_text = emotion_simulator.safe_simulate_emotion(
-                    event=chat_request.message,
-                    intensity=5,
-                    blend_threshold=0.8,
-                    holistic_influence=False,
-                    cultural_context=None,
-                )
-                base_emotion = emotion_simulator.get_current_emotion()
-                probabilities = emotion_simulator.get_emotion_probabilities(chat_request.message)
-                user_emotion = {
-                    "emotion": base_emotion,
-                    "emotion_text": emotion_text,
-                    "probabilities": probabilities,
-                }
-            except Exception as emotion_error:
-                logger.warning(f"Emotion simulation (user) failed: {emotion_error}")
+        user_emotion = _compute_emotion(chat_request.message, intensity=5, blend_threshold=0.8, holistic_influence=False, cultural_context=None)
 
         # Load conversation history with graceful fallback
         try:
@@ -933,24 +969,7 @@ async def chat_with_grok(
         encrypted_thinking = grok_result.get('encrypted_thinking')
 
         # Compute assistant emotion
-        if emotion_simulator and response_text:
-            try:
-                assistant_emotion_text = emotion_simulator.safe_simulate_emotion(
-                    event=response_text,
-                    intensity=5,
-                    blend_threshold=0.8,
-                    holistic_influence=False,
-                    cultural_context=None,
-                )
-                assistant_base_emotion = emotion_simulator.get_current_emotion()
-                assistant_probabilities = emotion_simulator.get_emotion_probabilities(response_text)
-                assistant_emotion = {
-                    "emotion": assistant_base_emotion,
-                    "emotion_text": assistant_emotion_text,
-                    "probabilities": assistant_probabilities,
-                }
-            except Exception as emotion_error:
-                logger.warning(f"Emotion simulation (assistant) failed: {emotion_error}")
+        assistant_emotion = _compute_emotion(response_text, intensity=5, blend_threshold=0.8, holistic_influence=False, cultural_context=None) if response_text else None
 
         # Save conversation (if history_store is available)
         user_message_id = None
@@ -972,18 +991,7 @@ async def chat_with_grok(
             )
         
         # Store response_id if available
-        if response_id and assistant_message_id:
-            try:
-                supabase = get_supabase_client()
-                if supabase:
-                    await run_supabase_async(
-                        supabase.table('messages').update({
-                            'xai_response_id': response_id,
-                            'xai_encrypted_thinking': encrypted_thinking
-                        }).eq('id', assistant_message_id).execute
-                    )
-            except Exception as e:
-                logger.warning(f'Failed to store response_id: {e}')
+        await _store_response_metadata(assistant_message_id, response_id, encrypted_thinking)
 
         await cache_delete(f"chat:history:{user['id']}:{session_id}")
         await cache_delete(f"chat:history:{user['id']}:all")
