@@ -161,6 +161,20 @@ class GrokLLM(LLM):
         logger.info("Using direct Grok API call as fallback")
         return self._direct_grok_api_call(user_message, roboto_context, previous_response_id)
     
+    def _get_xai_base_url(self) -> str:
+        base = (os.getenv("XAI_API_BASE_URL") or "https://api.x.ai").rstrip("/")
+        return base
+
+    def _get_xai_chat_paths(self) -> list[str]:
+        custom_path = os.getenv("XAI_API_CHAT_PATH")
+        if custom_path:
+            return [custom_path.lstrip("/")]
+        return [
+            "v1/chat/completions",
+            "v1/messages",
+            "chat/completions",
+        ]
+
     def _direct_grok_api_call(
         self,
         user_message: str,
@@ -172,8 +186,8 @@ class GrokLLM(LLM):
         
         api_key = os.getenv("XAI_API_KEY")
         
-        # xAI Grok uses OpenAI-compatible endpoint
-        url = "https://api.x.ai/v1/chat/completions"
+        base_url = self._get_xai_base_url()
+        url = f"{base_url}/v1/chat/completions"
         
         # Build messages
         messages = []
@@ -191,7 +205,7 @@ class GrokLLM(LLM):
         messages.append({"role": "user", "content": user_message})
         
         payload = {
-            "model": "grok-beta",
+            "model": os.getenv("XAI_MODEL", "grok-beta"),
             "messages": messages,
             "stream": False,
             "temperature": 0.7,
@@ -258,27 +272,24 @@ class GrokLLM(LLM):
         """Try alternate Grok API endpoint structures"""
         import httpx
         
-        # Try v1/messages endpoint (Anthropic-style)
-        alternate_urls = [
-            "https://api.x.ai/v1/messages",
-            "https://api.x.ai/chat/completions",
-        ]
+        base_url = self._get_xai_base_url()
+        alternate_urls = [f"{base_url}/{path}" for path in self._get_xai_chat_paths()]
         
         for url in alternate_urls:
             try:
                 logger.info(f"Trying alternate endpoint: {url}")
                 
                 # Try Anthropic-style format for /v1/messages
-                if "messages" in url:
+                if url.endswith("/messages"):
                     payload = {
-                        "model": "grok-beta",
+                        "model": os.getenv("XAI_MODEL", "grok-beta"),
                         "messages": [{"role": "user", "content": user_message}],
                         "system": roboto_context or "You are Roboto SAI.",
                         "max_tokens": 1024,
                     }
                 else:
                     payload = {
-                        "model": "grok-beta",
+                        "model": os.getenv("XAI_MODEL", "grok-beta"),
                         "messages": [
                             {"role": "system", "content": roboto_context or "You are Roboto SAI."},
                             {"role": "user", "content": user_message}
@@ -320,11 +331,58 @@ class GrokLLM(LLM):
                 logger.debug(f"Alternate endpoint {url} failed: {e}")
                 continue
         
-        # All endpoints failed
+        # All endpoints failed - try OpenAI fallback if configured
+        openai_key = os.getenv("OPENAI_API_KEY")
+        if openai_key:
+            logger.warning("Grok API unavailable, attempting OpenAI fallback")
+            return self._try_openai_fallback(user_message, roboto_context, openai_key)
+
         return {
             "success": False, 
-            "error": "Could not connect to Grok API. Please verify your XAI_API_KEY is valid and has access to the Grok API. Visit https://console.x.ai for API documentation."
+            "error": "Could not connect to Grok API. Please verify your XAI_API_KEY is valid and has access to the Grok API. Set XAI_API_BASE_URL/XAI_API_CHAT_PATH if endpoints changed, or configure OPENAI_API_KEY for fallback. Visit https://console.x.ai for API documentation."
         }
+
+    def _try_openai_fallback(
+        self,
+        user_message: str,
+        roboto_context: Optional[str],
+        api_key: str,
+    ) -> Dict[str, Any]:
+        import httpx
+
+        url = (os.getenv("OPENAI_API_BASE_URL") or "https://api.openai.com/v1").rstrip("/") + "/chat/completions"
+        model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+
+        messages = []
+        if roboto_context:
+            messages.append({"role": "system", "content": f"You are Roboto SAI. Context: {roboto_context}"})
+        else:
+            messages.append({"role": "system", "content": "You are Roboto SAI, an AI companion."})
+        messages.append({"role": "user", "content": user_message})
+
+        payload = {
+            "model": model,
+            "messages": messages,
+            "temperature": 0.7,
+        }
+
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+
+        try:
+            with httpx.Client(timeout=60.0) as client:
+                response = client.post(url, json=payload, headers=headers)
+                response.raise_for_status()
+                data = response.json()
+                content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                if content:
+                    return {"success": True, "response": content, "response_id": data.get("id")}
+        except Exception as e:
+            logger.error(f"OpenAI fallback failed: {e}")
+
+        return {"success": False, "error": "OpenAI fallback failed. Verify OPENAI_API_KEY and model access."}
 
     def _build_from_messages(self, messages: List[BaseMessage]) -> tuple[str, str, Optional[str]]:
         context_parts = []
