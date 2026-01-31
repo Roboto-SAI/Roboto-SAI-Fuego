@@ -12,14 +12,14 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
-# Copy requirements and constraints
+# Copy requirements first (constraints.txt is optional)
 COPY requirements.txt ./
-COPY constraints.txt ./
 
-# Install dependencies with constraints
-RUN pip install --no-cache-dir -r requirements.txt -c constraints.txt
+# Install dependencies (without constraints if not needed)
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
-# Verify SDK integrity
+# Verify SDK integrity (optional - continues if not available)
 RUN python -c "import roboto_sai_sdk; print('SDK integrity verified')" || echo "SDK not required for basic functionality"
 
 # Copy backend code
@@ -27,9 +27,6 @@ COPY . /app/
 
 # Create data directory
 RUN mkdir -p /app/data && chown -R roboto:roboto /app
-
-# Set working directory
-WORKDIR /app
 
 # Set Python path
 ENV PYTHONPATH=/app

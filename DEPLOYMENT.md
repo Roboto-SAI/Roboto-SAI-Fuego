@@ -68,6 +68,16 @@ NODE_ENV=production
 - Check Render logs for import errors
 - Verify all environment variables are set
 - Check Supabase connection
+- If you see "constraints.txt not found": This is fixed in latest Dockerfile (removed constraints.txt requirement)
+
+### Backend Docker Build Fails
+- **Error: "requirements.txt not found" or "constraints.txt not found"**
+  - Ensure you're using the latest `backend/Dockerfile` which doesn't require constraints.txt
+  - Verify `dockerContext: ./backend` in render.yaml
+  - Check that `backend/requirements.txt` exists in your repo
+- **Error: "roboto-sai-sdk" fails to install**
+  - SDK is optional - build will continue
+  - Verify your repo has access to the SDK GitHub repo if needed
 
 ### Frontend Fails to Build
 - Verify `VITE_SUPABASE_URL` is set during build
