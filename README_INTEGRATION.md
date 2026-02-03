@@ -452,7 +452,190 @@ docker-compose exec roboto-sai-backend python -c "import os; print(os.getenv('XA
 
 ---
 
-## 📞 Support
+## � MCP Sovereign Agent Integration
+
+**Roboto SAI Fuego** now includes **Model Context Protocol (MCP)** integration for sovereign local machine control. The MCP architecture enables Roboto SAI to interact with your local machine, filesystem, browser, and external services while maintaining strict permission controls.
+
+### MCP Architecture
+
+```
+Frontend (React) → RobotoClient SDK → Backend API + OS Agent → MCP Servers
+                                       ↓
+                                 Scoped Trust Model B
+                                       ↓
+                    Filesystem • Browser • Email • Twitter • SAI Internal
+```
+
+### Components
+
+#### 🤖 **OS Agent** (`os-agent/`)
+- **Port:** `http://localhost:5055`
+- **Role:** MCP Host daemon managing server connections and permissions
+- **Permissions:** JSON-based access controls (filesystem paths, browser automation, etc.)
+- **API:** RESTful endpoints for tool calls and server management
+
+#### 📁 **MCP Servers** (`mcp-servers/`)
+- **fs-server:** Filesystem operations (read/write/list/search) - restricted to R:/D:/ drives
+- **browser-server:** Web automation (open pages, search, click, type, extract content)
+- **email-server:** Email operations (send, read inbox)
+- **twitter-server:** Social media automation
+- **sai-internal-server:** Exposes backend tools as MCP tools
+
+#### 🔌 **RobotoClient SDK** (`sdk/`)
+- **Single Interface:** Unified API for backend chat + MCP tool calls
+- **Streaming:** Real-time chat with tool call visualization
+- **Approvals:** High-risk action confirmation flows
+- **React Hook:** `useRobotoClient()` for seamless frontend integration
+
+### MCP Local Development (Without Docker)
+
+If Docker is unavailable, run all services locally:
+
+#### Windows (PowerShell)
+```powershell
+# Start all services
+.\scripts\dev-all.ps1
+
+# Stop all services
+.\scripts\dev-all.ps1 -Stop
+```
+
+#### Windows (Batch)
+```batch
+# Start all services
+scripts\dev-all.bat
+
+# Stop manually with Ctrl+C
+```
+
+#### Linux/macOS
+```bash
+# Start all services
+./scripts/dev-all.sh
+
+# Stop all services
+./scripts/dev-all.sh --stop
+```
+
+#### Manual Service Startup
+
+1. **Backend API** (Terminal 1)
+   ```bash
+   cd backend
+   python main_modular.py
+   ```
+
+2. **OS Agent** (Terminal 2)
+   ```bash
+   cd os-agent
+   npm run dev
+   ```
+
+3. **MCP Filesystem Server** (Terminal 3)
+   ```bash
+   cd mcp-servers/fs-server
+   npm run build && npm start
+   ```
+
+4. **Frontend** (Terminal 4)
+   ```bash
+   npm run dev
+   ```
+
+### Service URLs (Local Development)
+- **Frontend:** `http://localhost:8080`
+- **Backend API:** `http://localhost:5000`
+- **OS Agent:** `http://localhost:5055`
+- **MCP Management:** `http://localhost:8080/mcp`
+
+### MCP Tool Usage Examples
+
+#### Filesystem Operations
+```javascript
+const { callTool } = useRobotoClient();
+
+// List directory
+await callTool('mcp', 'listDir', { path: 'R:\\Projects' }, 'filesystem');
+
+// Read file
+await callTool('mcp', 'readFile', { path: 'R:\\Projects\\readme.txt' }, 'filesystem');
+
+// Search files
+await callTool('mcp', 'searchInFiles', { 
+  rootPath: 'R:\\Projects',
+  query: 'function' 
+}, 'filesystem');
+```
+
+#### Browser Automation
+```javascript
+// Search web
+await callTool('mcp', 'searchWeb', { query: 'quantum computing' }, 'browser');
+
+// Open page and extract content
+await callTool('mcp', 'openPage', { url: 'https://example.com' }, 'browser');
+await callTool('mcp', 'extractContent', { selector: 'h1' }, 'browser');
+```
+
+### Security & Permissions
+
+**Scoped Trust Model B** ensures Roboto SAI only accesses authorized resources:
+
+```json
+{
+  "filesystem": {
+    "read": true,
+    "write": true,
+    "paths": ["R:\\", "D:\\"]
+  },
+  "browser": {
+    "control": true
+  },
+  "email": {
+    "send": true,
+    "allowedDomains": ["gmail.com"]
+  },
+  "twitter": {
+    "post": true
+  },
+  "shell": {
+    "allowedCommands": ["git", "ls", "cat"]
+  }
+}
+```
+
+### Approval Flows
+
+High-risk actions require user approval:
+- File writes beyond allowed paths
+- Email sending
+- Twitter posting
+- Shell command execution
+
+Approvals appear in the chat UI and expire after 5 minutes.
+
+### Configuration
+
+Create `.env` files in respective service directories:
+
+**OS Agent (.env)**
+```env
+PORT=5055
+LOG_LEVEL=info
+AUTO_APPROVE_LOW_RISK=true
+ENABLE_TWITTER=false
+ENABLE_EMAIL=false
+```
+
+**Backend (.env)**
+```env
+XAI_API_KEY=your-key-here
+DATABASE_URL=sqlite:///./roboto.db
+```
+
+---
+
+## �📞 Support
 
 - **Issues:** GitHub Issues
 - **Discussion:** GitHub Discussions
