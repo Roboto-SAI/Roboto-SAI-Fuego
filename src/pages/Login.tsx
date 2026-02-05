@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowLeft } from 'lucide-react';
@@ -10,12 +11,18 @@ import { useAuthStore } from '@/stores/authStore';
 
 const Login = () => {
   const navigate = useNavigate();
-  const { loginWithPassword, refreshSession, username } = useAuthStore();
+  const { loginWithPassword, username } = useAuthStore();
+  const isLoggedIn = useAuthStore((state) => state.isLoggedIn);
+
+  useEffect(() => {
+    if (isLoggedIn) {
+      navigate('/chat', { replace: true });
+    }
+  }, [isLoggedIn, navigate]);
 
   const handleAuthSubmit = async (data: { username: string; email: string; password: string }) => {
     try {
       await loginWithPassword(data.email, data.password);
-      await refreshSession();
       toast.success('Welcome to the eternal flame!');
       navigate('/chat');
     } catch (error: unknown) {

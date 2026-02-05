@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowLeft } from 'lucide-react';
@@ -11,6 +12,13 @@ import { useAuthStore } from '@/stores/authStore';
 const Register = () => {
   const navigate = useNavigate();
   const { register, refreshSession, username } = useAuthStore();
+  const isLoggedIn = useAuthStore((state) => state.isLoggedIn);
+
+  useEffect(() => {
+    if (isLoggedIn) {
+      navigate('/chat', { replace: true });
+    }
+  }, [isLoggedIn, navigate]);
 
   const handleAuthSubmit = async (data: { username: string; email: string; password: string }) => {
     try {

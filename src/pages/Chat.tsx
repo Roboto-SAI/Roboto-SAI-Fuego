@@ -44,7 +44,7 @@ const getApiBaseUrl = (): string => {
 const Chat = () => {
 const navigate = useNavigate();
 const { toast } = useToast();
-const { userId, isLoggedIn, refreshSession } = useAuthStore();
+const { userId, isLoggedIn } = useAuthStore();
 const {
   getMessages,
   isLoading,
@@ -91,14 +91,7 @@ const { buildContextForAI, addMemory, addConversationSummary, trackEntity, isRea
     scrollToBottom();
   }, [messages, isLoading]);
 
-  useEffect(() => {
-    (async () => {
-      const ok = await refreshSession();
-      if (!ok) {
-        navigate('/login');
-      }
-    })();
-  }, [refreshSession, navigate]);
+  // refreshSession handled by RequireAuth
 
   useEffect(() => {
     if (!isLoggedIn) return;

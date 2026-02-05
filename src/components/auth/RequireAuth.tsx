@@ -18,6 +18,14 @@ export const RequireAuth = ({ children }: RequireAuthProps) => {
 
   useEffect(() => {
     let active = true;
+
+    if (isLoggedIn) {
+      setChecked(true);
+      return () => {
+        active = false;
+      };
+    }
+
     (async () => {
       const ok = await refreshSession();
       if (!active) return;
@@ -29,7 +37,7 @@ export const RequireAuth = ({ children }: RequireAuthProps) => {
     return () => {
       active = false;
     };
-  }, [refreshSession, navigate]);
+  }, [isLoggedIn, refreshSession, navigate]);
 
   if (!checked) return null;
   if (!isLoggedIn) return null;
