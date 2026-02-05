@@ -21,8 +21,14 @@ import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { useToast } from '@/components/ui/use-toast';
+import { useRobotoClient } from '@/hooks/useRobotoClient';
+import ChatPanel from '@/components/ChatPanel';
+import ToolApprovalModal from '@/components/ToolApprovalModal';
+import McpServerManager from '@/components/McpServerManager';
+import McpAppFrame from '@/components/McpAppFrame';
 
 type ChatApiResponse = {
+  reply?: string;
   response?: string;
   content?: string;
   error?: string;
@@ -31,20 +37,10 @@ type ChatApiResponse = {
   user_message_id?: string;
 };
 
-const getApiBaseUrl = (): string => {
-  const envUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '';
-  const trimmed = envUrl.replace(/\/+$/, '');
-  if (!trimmed) {
-    return '';
-  }
-
-  return trimmed.endsWith('/api') ? trimmed.slice(0, -4) : trimmed;
-};
-
 const Chat = () => {
 const navigate = useNavigate();
 const { toast } = useToast();
-const { userId, isLoggedIn } = useAuthStore();
+const { userId, isLoggedIn, username, email } = useAuthStore();
 const {
   getMessages,
   isLoading,
@@ -63,6 +59,21 @@ const {
 } = useChatStore();
 
 const { buildContextForAI, addMemory, addConversationSummary, trackEntity, isReady: memoryReady } = useMemoryStore();
+
+const {
+  events,
+  pendingApproval,
+  servers,
+  serverError,
+  togglingServers,
+  allowedTools,
+  fetchServers,
+  toggleServer,
+  sendMessage: streamMessage,
+  approveAction,
+  denyAction,
+  toggleTool
+} = useRobotoClient();
 
   const messages = getMessages();
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -100,6 +111,10 @@ const { buildContextForAI, addMemory, addConversationSummary, trackEntity, isRea
     }
   }, [isLoggedIn, userId, storeUserId, loadUserHistory]);
 
+  useEffect(() => {
+    void fetchServers();
+  }, [fetchServers]);
+
   // Extract and store important information from conversations
   const extractMemories = async (userMessage: string, robotoResponse: string, sessionId: string) => {
     // Extract potential entities (simple pattern matching - can be enhanced)
@@ -131,6 +146,43 @@ const { buildContextForAI, addMemory, addConversationSummary, trackEntity, isRea
     }
   };
 
+  const displayChatError = (errorMessage: string) => {
+    let title = "Connection Error";
+    let description = "The eternal fire flickers but does not die. Please try again.";
+
+    if (errorMessage.includes('404') || errorMessage.includes('Not Found')) {
+      title = "API Endpoint Not Found";
+      description = "The chat endpoint is not available. Grok API may be unavailable. Check your deployment configuration.";
+    } else if (errorMessage.includes('401') || errorMessage.includes('Unauthorized')) {
+      title = "Authentication Required";
+      description = "Your session has expired. Please log in again.";
+      setTimeout(() => navigate('/login'), 2000);
+    } else if (errorMessage.includes('403') || errorMessage.includes('Forbidden')) {
+      title = "Access Denied";
+      description = "You don't have permission to access this resource.";
+    } else if (errorMessage.includes('503') || errorMessage.includes('Service Unavailable')) {
+      title = "Service Temporarily Unavailable";
+      description = "Grok API is currently unavailable. This may be due to rate limits or API access issues. Try again in a moment.";
+    } else if (errorMessage.includes('timeout') || errorMessage.includes('ETIMEDOUT')) {
+      title = "Request Timeout";
+      description = "The request took too long. Please check your internet connection and try again.";
+    } else if (errorMessage.includes('network') || errorMessage.includes('Failed to fetch')) {
+      title = "Network Error";
+      description = "Cannot connect to the server. Please check your internet connection.";
+    } else if (errorMessage.includes('Could not connect to Grok API')) {
+      title = "Grok API Unavailable";
+      description = "The AI service is currently unavailable. The backend may need configuration or Grok API access.";
+    } else if (errorMessage.length > 0 && errorMessage !== 'Connection error') {
+      description = errorMessage;
+    }
+
+    toast({
+      variant: "destructive",
+      title,
+      description,
+    });
+  };
+
   const handleSend = async (content: string, attachments?: FileAttachment[]) => {
     if (!isLoggedIn || !userId) {
       navigate('/login');
@@ -139,114 +191,65 @@ const { buildContextForAI, addMemory, addConversationSummary, trackEntity, isRea
 
     setLoading(true);
 
+    const conversationId = addMessage({ role: 'user', content, attachments });
+    const sessionId = conversationId;
+
+    const conversationContext = getAllConversationsContext();
+    const memoryContext = memoryReady ? buildContextForAI(content) : '';
+    const combinedContext = memoryContext
+      ? `${memoryContext}\n\n## Recent Conversation\n${conversationContext}`
+      : conversationContext;
+
+    const contextPayload = {
+      user_name: username || email?.split('@')[0] || userId || 'user',
+      conversation_context: combinedContext,
+    };
+
     try {
-      const conversationId = addMessage({ role: 'user', content, attachments });
-      const sessionId = conversationId;
-
-      // Build context from both conversation history and memory system
-      const conversationContext = getAllConversationsContext();
-      const memoryContext = memoryReady ? buildContextForAI(content) : '';
-
-      // Combine contexts intelligently
-      const combinedContext = memoryContext
-        ? `${memoryContext}\n\n## Recent Conversation\n${conversationContext}`
-        : conversationContext;
-
-      const apiBaseUrl = getApiBaseUrl();
-      const chatUrl = apiBaseUrl
-        ? `${apiBaseUrl}${agentMode ? '/api/agent/chat' : '/api/chat'}`
-        : (agentMode ? '/api/agent/chat' : '/api/chat');
-
-      const payload = {
-        message: content,
-        context: combinedContext,
-        session_id: sessionId,
-        user_id: userId,
-      };
-
-      const response = await fetch(chatUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(payload),
-      });
-
-      const data = (await response.json()) as ChatApiResponse;
-
-      if (!response.ok) {
-        let errorMessage = `Request failed (${response.status})`;
-        if (data.detail) {
-           errorMessage = typeof data.detail === 'string' 
-             ? data.detail 
-             : JSON.stringify(data.detail);
-        } else if (data.error) {
-           errorMessage = typeof data.error === 'string'
-             ? data.error
-             : JSON.stringify(data.error);
+      await streamMessage(
+        {
+          message: content,
+          context: contextPayload,
+          sessionId,
+          userId,
+          reasoningEffort: 'high'
+        },
+        (event) => {
+          if (event.type === 'assistant_message') {
+            const robotoContent = event.data.content || 'Roboto responded.';
+            addMessage({
+              role: 'roboto',
+              content: robotoContent,
+              id: event.id
+            });
+            if (memoryReady) {
+              void extractMemories(content, robotoContent, sessionId);
+            }
+          } else if (event.type === 'tool_call') {
+            addMessage({
+              role: 'roboto',
+              content: `Tool requested: ${event.data.toolName} (${event.data.serverId ?? 'mcp'})`
+            });
+          } else if (event.type === 'tool_result') {
+            const payloadText = typeof event.data.result === 'string'
+              ? event.data.result
+              : JSON.stringify(event.data.result, null, 2);
+            addMessage({
+              role: 'roboto',
+              content: `Tool result (${event.data.toolCall.toolName}): ${payloadText}`
+            });
+          } else if (event.type === 'error') {
+            const message = typeof event.data.message === 'string'
+              ? event.data.message
+              : 'An error occurred during the chat stream.';
+            displayChatError(message);
+          }
         }
-        throw new Error(errorMessage);
-      }
-
-      const robotoContent = data.response || data.content || 'Flame response received.';
-
-      addMessage({
-        role: 'roboto',
-        content: robotoContent,
-        id: data.roboto_message_id || undefined,
-      });
-
-      // Extract and store memories from this exchange
-      if (memoryReady) {
-        await extractMemories(content, robotoContent, sessionId);
-      }
+      );
     } catch (error) {
       console.error('[Chat] handleSend error', error);
-      
-      // Show specific error based on the error type
       const errorMessage = error instanceof Error ? error.message : 'Connection error';
-      
-      // Parse error message to provide better feedback
-      let title = "Connection Error";
-      let description = "The eternal fire flickers but does not die. Please try again.";
-      
-      if (errorMessage.includes('404') || errorMessage.includes('Not Found')) {
-        title = "API Endpoint Not Found";
-        description = "The chat endpoint is not available. Grok API may be unavailable. Check your deployment configuration.";
-      } else if (errorMessage.includes('401') || errorMessage.includes('Unauthorized')) {
-        title = "Authentication Required";
-        description = "Your session has expired. Please log in again.";
-        // Redirect to login after showing error
-        setTimeout(() => navigate('/login'), 2000);
-      } else if (errorMessage.includes('403') || errorMessage.includes('Forbidden')) {
-        title = "Access Denied";
-        description = "You don't have permission to access this resource.";
-      } else if (errorMessage.includes('503') || errorMessage.includes('Service Unavailable')) {
-        title = "Service Temporarily Unavailable";
-        description = "Grok API is currently unavailable. This may be due to rate limits or API access issues. Try again in a moment.";
-      } else if (errorMessage.includes('timeout') || errorMessage.includes('ETIMEDOUT')) {
-        title = "Request Timeout";
-        description = "The request took too long. Please check your internet connection and try again.";
-      } else if (errorMessage.includes('network') || errorMessage.includes('Failed to fetch')) {
-        title = "Network Error";
-        description = "Cannot connect to the server. Please check your internet connection.";
-      } else if (errorMessage.includes('Could not connect to Grok API')) {
-        title = "Grok API Unavailable";
-        description = "The AI service is currently unavailable. The backend may need configuration or Grok API access.";
-      } else if (errorMessage.length > 0 && errorMessage !== 'Connection error') {
-        // Show the actual error message if it's specific
-        description = errorMessage;
-      }
-      
-      toast({
-        variant: "destructive",
-        title,
-        description,
-      });
-      
-      // Remove the user message that failed to send (optional - keeps history clean)
-      // Note: You might want to keep the user's message, so commenting this out
-      // If you want to remove it, uncomment the line below:
-      // useChatStore.getState().removeLastMessage();
+      displayChatError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -263,6 +266,17 @@ const { buildContextForAI, addMemory, addConversationSummary, trackEntity, isRea
 
       {/* Header */}
       <Header />
+
+      {/* MCP Server Snapshot */}
+      <div className="px-4 pt-2">
+        <McpServerManager
+          servers={servers}
+          error={serverError}
+          onRefresh={fetchServers}
+          onToggle={toggleServer}
+          togglingServers={togglingServers}
+        />
+      </div>
 
       {/* Sidebar Toggle Button */}
       <Button
@@ -286,7 +300,7 @@ const { buildContextForAI, addMemory, addConversationSummary, trackEntity, isRea
       />
 
       {/* Chat Container */}
-      <main className="flex-1 flex flex-col pt-16" aria-busy={isLoading}>
+      <main className="flex-1 flex flex-col pt-16">
         {/* Messages Area */}
         <div className="flex-1 overflow-y-auto">
           <div className="container mx-auto max-w-4xl px-4 py-6 pl-16">
@@ -352,7 +366,26 @@ const { buildContextForAI, addMemory, addConversationSummary, trackEntity, isRea
           agentMode={agentMode}
           onAgentToggle={toggleAgentMode}
         />
+
+        {/* Event Panel */}
+        <div className="w-full px-4 pt-4">
+          <div className="grid gap-4 lg:grid-cols-[1.2fr,0.8fr]">
+            <ChatPanel events={events} />
+            <McpAppFrame
+              servers={servers}
+              allowedTools={allowedTools}
+              onToggleTool={toggleTool}
+            />
+          </div>
+        </div>
       </main>
+
+      <ToolApprovalModal
+        approval={pendingApproval ?? undefined}
+        open={Boolean(pendingApproval)}
+        onApprove={() => pendingApproval && approveAction(pendingApproval.approvalId)}
+        onDeny={() => pendingApproval && denyAction(pendingApproval.approvalId)}
+      />
 
       {/* Vent Mode Blood Rain Effect */}
       {ventMode && (
