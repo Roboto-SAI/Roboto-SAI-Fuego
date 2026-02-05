@@ -48,6 +48,11 @@ const ApprovalActionSchema = z.object({
   userId: z.string()
 });
 
+const ServerToggleSchema = z.object({
+  serverId: z.string(),
+  enabled: z.boolean()
+});
+
 /**
  * Create Express API for MCP OS Agent
  */
@@ -265,6 +270,44 @@ export function createApi(
       res.status(500).json({
         success: false,
         error: 'Failed to get server information'
+      });
+    }
+  });
+
+  /**
+   * Enable or disable an MCP server
+   */
+  app.post('/api/servers/toggle', async (req: Request, res: Response) => {
+    try {
+      const parsed = ServerToggleSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid request body',
+          details: parsed.error.errors
+        });
+      }
+
+      const { serverId, enabled } = parsed.data;
+      await mcpHost.setServerEnabled(serverId, enabled);
+
+      const status = mcpHost.getStatus();
+      const server = status.servers.find((entry) => entry.id === serverId);
+
+      return res.json({
+        success: true,
+        data: {
+          server,
+          status
+        }
+      });
+    } catch (error) {
+      logger.error('Toggle server error', {
+        error: error instanceof Error ? error.message : String(error)
+      });
+      return res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to update server state'
       });
     }
   });

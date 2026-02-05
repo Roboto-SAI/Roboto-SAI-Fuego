@@ -11,6 +11,8 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { PermissionMiddleware, PermissionCheckResult } from './permissions.js';
 import winston from 'winston';
 import { spawn, ChildProcess } from 'child_process';
+import fs from 'fs/promises';
+import path from 'path';
 
 // Initialize logger
 const logger = winston.createLogger({
@@ -34,6 +36,7 @@ export interface McpServerConfig {
   args: string[];
   env?: Record<string, string>;
   enabled: boolean;
+  description?: string;
 }
 
 /**
@@ -85,6 +88,11 @@ interface McpServerInstance {
   tools: Array<{ name: string; description: string; inputSchema: unknown }>;
 }
 
+interface PersistedServerState {
+  updatedAt: string;
+  servers: Record<string, boolean>;
+}
+
 /**
  * McpHost - Core MCP Protocol Host
  */
@@ -93,13 +101,62 @@ export class McpHost {
   private permissionMiddleware: PermissionMiddleware;
   private pendingApprovals: Map<string, ApprovalRequest> = new Map();
   private approvalTimeout: number = 300000; // 5 minutes
+  private serverConfigs: McpServerConfig[];
+  private stateFilePath?: string;
 
   constructor(
-    private serverConfigs: McpServerConfig[],
-    permissionMiddleware?: PermissionMiddleware
+    serverConfigs: McpServerConfig[],
+    permissionMiddleware?: PermissionMiddleware,
+    stateFilePath?: string
   ) {
+    this.serverConfigs = serverConfigs;
     this.permissionMiddleware = permissionMiddleware || new PermissionMiddleware();
+    this.stateFilePath = stateFilePath;
     logger.info('MCP Host initialized', { serverCount: serverConfigs.length });
+  }
+
+  async loadServerState(): Promise<void> {
+    if (!this.stateFilePath) {
+      return;
+    }
+
+    try {
+      const raw = await fs.readFile(this.stateFilePath, 'utf-8');
+      const payload = JSON.parse(raw) as PersistedServerState;
+      const servers = payload?.servers ?? {};
+
+      Object.entries(servers).forEach(([name, enabled]) => {
+        const config = this.serverConfigs.find((entry) => entry.name === name);
+        if (config) {
+          config.enabled = Boolean(enabled);
+        }
+      });
+
+      logger.info('Loaded MCP server state', { path: this.stateFilePath });
+    } catch (error) {
+      const err = error as NodeJS.ErrnoException;
+      if (err.code !== 'ENOENT') {
+        logger.warn('Failed to load MCP server state', {
+          error: err.message
+        });
+      }
+    }
+  }
+
+  private async persistServerState(): Promise<void> {
+    if (!this.stateFilePath) {
+      return;
+    }
+
+    const payload: PersistedServerState = {
+      updatedAt: new Date().toISOString(),
+      servers: Object.fromEntries(
+        this.serverConfigs.map((config) => [config.name, config.enabled])
+      )
+    };
+
+    await fs.mkdir(path.dirname(this.stateFilePath), { recursive: true });
+    await fs.writeFile(this.stateFilePath, JSON.stringify(payload, null, 2), 'utf-8');
   }
 
   /**
@@ -194,6 +251,53 @@ export class McpHost {
     }
   }
 
+  private async disconnectServer(name: string): Promise<void> {
+    const instance = this.servers.get(name);
+    if (!instance) {
+      return;
+    }
+
+    try {
+      await instance.client.close();
+      instance.process.kill();
+      logger.info('MCP server disconnected', { name });
+    } catch (error) {
+      logger.error('Error disconnecting MCP server', {
+        name,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    } finally {
+      this.servers.delete(name);
+    }
+  }
+
+  async setServerEnabled(name: string, enabled: boolean): Promise<void> {
+    const config = this.serverConfigs.find((entry) => entry.name === name);
+    if (!config) {
+      throw new Error(`Unknown MCP server: ${name}`);
+    }
+
+    if (config.enabled === enabled) {
+      return;
+    }
+
+    const previous = config.enabled;
+    config.enabled = enabled;
+
+    try {
+      if (enabled) {
+        await this.connectServer(config);
+      } else {
+        await this.disconnectServer(name);
+      }
+
+      await this.persistServerState();
+    } catch (error) {
+      config.enabled = previous;
+      throw error;
+    }
+  }
+
   /**
    * Execute a tool call with permission checking
    */
@@ -255,7 +359,9 @@ export class McpHost {
           timestamp: new Date().toISOString(),
           data: {
             approvalId: approvalRequest.id,
-            expiresAt: approvalRequest.expiresAt
+            expiresAt: approvalRequest.expiresAt,
+            toolCall: approvalRequest.toolCall,
+            permissionCheck: approvalRequest.permissionCheck,
           }
         };
       }
@@ -432,18 +538,27 @@ export class McpHost {
   getStatus(): {
     connected: number;
     servers: Array<{
+      id: string;
       name: string;
+      description: string;
+      enabled: boolean;
       connected: boolean;
       toolsCount: number;
-      tools: string[];
+      tools: Array<{ name: string; description: string; inputSchema: unknown }>;
     }>;
   } {
-    const servers = Array.from(this.servers.values()).map(instance => ({
-      name: instance.config.name,
-      connected: instance.connected,
-      toolsCount: instance.tools.length,
-      tools: instance.tools.map(t => t.name)
-    }));
+    const servers = this.serverConfigs.map((config) => {
+      const instance = this.servers.get(config.name);
+      return {
+        id: config.name,
+        name: config.name,
+        description: config.description || `MCP Server ${config.name}`,
+        enabled: config.enabled,
+        connected: instance?.connected ?? false,
+        toolsCount: instance?.tools.length ?? 0,
+        tools: instance?.tools ?? []
+      };
+    });
 
     return {
       connected: servers.filter(s => s.connected).length,
@@ -457,20 +572,10 @@ export class McpHost {
   async disconnectAll(): Promise<void> {
     logger.info('Disconnecting all MCP servers...');
 
-    for (const [name, instance] of this.servers.entries()) {
-      try {
-        await instance.client.close();
-        instance.process.kill();
-        logger.info('MCP server disconnected', { name });
-      } catch (error) {
-        logger.error('Error disconnecting MCP server', {
-          name,
-          error: error instanceof Error ? error.message : String(error)
-        });
-      }
+    const names = Array.from(this.servers.keys());
+    for (const name of names) {
+      await this.disconnectServer(name);
     }
-
-    this.servers.clear();
     logger.info('All MCP servers disconnected');
   }
 }

@@ -12,6 +12,7 @@ import { McpHost, McpServerConfig } from './mcpHost.js';
 import { PermissionMiddleware } from './permissions.js';
 import { createApi } from './api.js';
 import winston from 'winston';
+import path from 'path';
 
 // Initialize logger
 const logger = winston.createLogger({
@@ -42,6 +43,7 @@ const logger = winston.createLogger({
 const MCP_SERVER_CONFIGS: McpServerConfig[] = [
   {
     name: 'filesystem',
+    description: 'Scoped filesystem server for secure disk access',
     command: 'node',
     args: ['/app/fs-server/dist/index.js'],
     env: {
@@ -53,6 +55,7 @@ const MCP_SERVER_CONFIGS: McpServerConfig[] = [
   },
   {
     name: 'browser',
+    description: 'Headless browser automation server',
     command: 'python3',
     args: ['-m', 'mcp_servers.browser_server'],
     env: {
@@ -64,6 +67,7 @@ const MCP_SERVER_CONFIGS: McpServerConfig[] = [
   },
   {
     name: 'twitter',
+    description: 'Twitter posting and browsing server',
     command: 'python3',
     args: ['-m', 'mcp_servers.twitter_server'],
     env: {
@@ -74,6 +78,7 @@ const MCP_SERVER_CONFIGS: McpServerConfig[] = [
   },
   {
     name: 'email',
+    description: 'Outbound email server',
     command: 'python3',
     args: ['-m', 'mcp_servers.email_server'],
     env: {
@@ -125,7 +130,10 @@ async function main(): Promise<void> {
 
     // Create MCP host
     logger.info('Creating MCP host...');
-    const mcpHost = new McpHost(MCP_SERVER_CONFIGS, permissionMiddleware);
+    const statePath = process.env.MCP_SERVER_STATE_PATH
+      || path.resolve(process.cwd(), 'data', 'mcp-server-state.json');
+    const mcpHost = new McpHost(MCP_SERVER_CONFIGS, permissionMiddleware, statePath);
+    await mcpHost.loadServerState();
     logger.info('✅ MCP host created');
 
     // Connect to MCP servers
