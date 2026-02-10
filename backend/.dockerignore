@@ -1,14 +1,15 @@
-# Exclude everything except backend directory and necessary files
-*
-!backend/
-!backend/**
-
-# But exclude virtual environments and cache
-backend/__pycache__/
-backend/*.pyc
-backend/.venv/
-backend/venv*/
-**/__pycache__/
-**/*.pyc
-**/.venv/
-**/venv*/
+# Exclude virtual environments, cache, and unnecessary files
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv*/
+.env
+.env.*
+*.log
+.cache/
+data/
+tests/
+*.db
+.git/
+.gitignore
