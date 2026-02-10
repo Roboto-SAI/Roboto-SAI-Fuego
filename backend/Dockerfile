@@ -15,10 +15,10 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
-# Copy requirements first (constraints.txt is optional)
-COPY backend/requirements.txt ./
+# Copy requirements first
+COPY requirements.txt ./
 
-# Install dependencies (without constraints if not needed)
+# Install dependencies
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
@@ -26,13 +26,12 @@ RUN pip install --no-cache-dir --upgrade pip && \
 RUN python -c "import roboto_sai_sdk; print('SDK integrity verified')" || echo "SDK not required for basic functionality"
 
 # Copy backend code (excluding virtual environments and cache)
-COPY backend/api/ ./api/
-COPY backend/services/ ./services/
-COPY backend/utils/ ./utils/
-COPY backend/*.py ./
-COPY backend/*.txt ./
-COPY backend/*.json ./
-COPY backend/*.sql ./
+COPY api/ ./api/
+COPY services/ ./services/
+COPY utils/ ./utils/
+COPY *.py ./
+COPY *.txt ./
+COPY *.sql ./
 
 # Set working directory to app (where files are copied)
 WORKDIR /app
